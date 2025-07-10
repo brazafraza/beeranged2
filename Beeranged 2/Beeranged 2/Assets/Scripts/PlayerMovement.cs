@@ -19,6 +19,8 @@ public class PlayerMovement : MonoBehaviour
     public KeyCode downKey = KeyCode.S;
     public KeyCode rightKey = KeyCode.D;
 
+  
+
     private void Start()
     {
         player = gameObject;

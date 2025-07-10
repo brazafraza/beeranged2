@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class PlayerAttack : MonoBehaviour
@@ -11,14 +12,25 @@ public class PlayerAttack : MonoBehaviour
     public float timeBetweenAttack = 2f;
     public bool readyToAttack = true;
 
+    public float damage = 5f;
+
+  
+
     private void Start()
     {
+      
+
+
+
         Attack(timeBetweenAttack);
+
+        
     }
+
 
     void FixedUpdate()
     {
-
+       
        
 
       

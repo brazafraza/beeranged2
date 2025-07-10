@@ -6,23 +6,30 @@ using UnityEngine;
 
 public class Enemy : MonoBehaviour
 {
+
+    [Header("Health")]
     public float health;
     public float maxHealth = 100f;
-
-    public bool takenDamage = false;
-    GameObject enemy;
-
-    public Color original;
-    public Color damaged;
-    public SpriteRenderer spriteRenderer;
 
     [Header("Movement")]
     private GameObject player;
     public Transform playerPos;
-    public float speed;
-    public float damage;
+    public float speed = 1;
 
-    private bool flipped = false;
+    [Header("Attack")]
+    public float damage = 1;
+    public bool canAttack = true;
+    public float attackCooldown = 2f;
+
+    [Header("Color Refs")]
+    public Color original;
+    public Color damaged;
+    public SpriteRenderer spriteRenderer;
+    private bool takenDamage = false;
+
+    //[Header("Refs")]
+    private PlayerStats ps;
+    private GameObject enemy;
 
 
     private void Start()
@@ -35,6 +42,7 @@ public class Enemy : MonoBehaviour
         player = GameObject.Find("Bee");
 
         playerPos = player.transform;
+        ps = FindObjectOfType<PlayerStats>();
 
 
 
@@ -56,18 +64,12 @@ public class Enemy : MonoBehaviour
 
             float z = transform.rotation.eulerAngles.z;
 
-            if ((!flipped && z > 90f && z < 270f))
-            {
-                    gameObject.transform.localScale = new Vector3(1f, -1f, 1f);
-                    flipped = true;
-                
-            }
-
-            if ((z < 90f && z > 270f && flipped))
-            {
+            if ( z > 90f && z < 270f)
+                gameObject.transform.localScale = new Vector3(1f, -1f, 1f);                  
+            else
                 gameObject.transform.localScale = new Vector3(1f, 1f, 1f);
-                flipped = false;
-            }
+
+            
 
 
             Vector2 playerP = playerPos.position;
@@ -95,6 +97,28 @@ public class Enemy : MonoBehaviour
         health = health - damage;
         takenDamage = true;
         //Debug.Log("Enemy: Enemy Took Damage");
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (canAttack)
+        {
+            if (other.CompareTag("Player"))
+            {
+                ps.health = ps.health - damage;
+                ps.UpdateUI();
+                //Debug.Log($"Enemy: Enemy dealth {damage}to player!");
+                StartCoroutine(AttackCooldown());
+            }
+        }    
+            
+    }
+
+    IEnumerator AttackCooldown()
+    {
+        canAttack = false;
+        yield return new WaitForSeconds(attackCooldown);
+        canAttack = true;
     }
 
     public void ResetColour()
