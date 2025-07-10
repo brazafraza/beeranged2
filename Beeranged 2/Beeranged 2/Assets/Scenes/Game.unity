@@ -195,7 +195,7 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 2
+  m_SortingOrder: 1
   m_Sprite: {fileID: 7482667652216324306, guid: 75f5f34dc1b5347e0b8351032682f224, type: 3}
   m_Color: {r: 0, g: 0, b: 0, a: 1}
   m_FlipX: 0
@@ -1218,6 +1218,10 @@ PrefabInstance:
       value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: 6431016882138191511, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
+      propertyPath: speed
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6431016882138191511, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
       propertyPath: damaged.a
       value: 1
       objectReference: {fileID: 0}
@@ -1252,6 +1256,18 @@ PrefabInstance:
     - target: {fileID: 6573133116308431143, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
       propertyPath: m_Name
       value: Wasp
+      objectReference: {fileID: 0}
+    - target: {fileID: 7150291160213551855, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
+      propertyPath: m_SortingOrder
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7259821437021186102, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7259821437021186102, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7259821437021186102, guid: c114cca69b32d41c1a5d98547fb71b6b, type: 3}
       propertyPath: m_LocalPosition.x

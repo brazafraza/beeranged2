@@ -1,5 +1,7 @@
+using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 public class Enemy : MonoBehaviour
@@ -14,6 +16,15 @@ public class Enemy : MonoBehaviour
     public Color damaged;
     public SpriteRenderer spriteRenderer;
 
+    [Header("Movement")]
+    private GameObject player;
+    public Transform playerPos;
+    public float speed;
+    public float damage;
+
+    private bool flipped = false;
+
+
     private void Start()
     {
         health = maxHealth;
@@ -21,11 +32,52 @@ public class Enemy : MonoBehaviour
         spriteRenderer = enemy.GetComponent<SpriteRenderer>();
         original = spriteRenderer.color;
 
+        player = GameObject.Find("Bee");
+
+        playerPos = player.transform;
+
+
+
     }
     private void Update()
     {
+
+        playerPos = player.transform;
+
         if (health <= 0)
             Destroy(gameObject);
+
+        if (playerPos != null )
+        {
+            //make enemy face and move towards player
+            Vector2 direction = (playerPos.position - transform.position).normalized;
+            float playerDir = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.Euler(0f, 0f, playerDir - 180f);
+
+            float z = transform.rotation.eulerAngles.z;
+
+            if ((!flipped && z > 90f && z < 270f))
+            {
+                    gameObject.transform.localScale = new Vector3(1f, -1f, 1f);
+                    flipped = true;
+                
+            }
+
+            if ((z < 90f && z > 270f && flipped))
+            {
+                gameObject.transform.localScale = new Vector3(1f, 1f, 1f);
+                flipped = false;
+            }
+
+
+            Vector2 playerP = playerPos.position;
+            Vector2 enemyPos = transform.position;
+            Vector2 newPos = Vector2.MoveTowards(enemyPos, playerP, (speed * Time.deltaTime));
+            transform.position = newPos;
+
+
+            
+        }
 
         if (takenDamage)
         {
