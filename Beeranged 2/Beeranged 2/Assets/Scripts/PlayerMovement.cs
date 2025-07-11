@@ -36,11 +36,11 @@ public class PlayerMovement : MonoBehaviour
 
         input.Normalize();
 
-        if (Input.GetKeyDown(upKey) || Input.GetKeyDown(leftKey) || Input.GetKeyDown(rightKey) || Input.GetKeyDown(downKey))
-        {
+        //if (Input.GetKeyDown(upKey) || Input.GetKeyDown(leftKey) || Input.GetKeyDown(rightKey) || Input.GetKeyDown(downKey))
+        //{
          
-           // Debug.Log("PlayerMovement: Player is moving!");
-        }
+        //   // Debug.Log("PlayerMovement: Player is moving!");
+        //}
 
 
     }
@@ -48,6 +48,7 @@ public class PlayerMovement : MonoBehaviour
     private void FixedUpdate()
     {
         rb.velocity = input * playerSpeed;
+      
     }
 
     

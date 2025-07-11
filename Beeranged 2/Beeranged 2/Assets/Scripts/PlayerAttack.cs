@@ -14,12 +14,14 @@ public class PlayerAttack : MonoBehaviour
 
     public float damage = 5f;
 
+    public PlayerMovement pm;
+
   
 
     private void Start()
     {
       
-
+        PlayerMovement pm = FindObjectOfType<PlayerMovement>();
 
 
         Attack(timeBetweenAttack);
@@ -52,10 +54,10 @@ public class PlayerAttack : MonoBehaviour
             GameObject projectile = Instantiate(projectilePrefab, firePoint.position, mouseRot);
 
             float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-            projectile.transform.rotation = Quaternion.Euler(0f, 0f, angle + 30f);
+            projectile.transform.rotation = Quaternion.Euler(0f, 0f, angle - 90f);
 
             Rigidbody2D rb = projectile.GetComponent<Rigidbody2D>();
-            rb.AddForce(direction * fireForce, ForceMode2D.Impulse);
+            rb.AddForce(((direction * fireForce)), ForceMode2D.Impulse);
 
            
 
