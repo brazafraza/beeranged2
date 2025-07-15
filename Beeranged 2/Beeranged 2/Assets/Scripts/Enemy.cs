@@ -7,6 +7,9 @@ using UnityEngine;
 public class Enemy : MonoBehaviour
 {
 
+
+   
+
     [Header("Health")]
     public float health;
     public float maxHealth = 100f;
@@ -21,6 +24,9 @@ public class Enemy : MonoBehaviour
     public bool canAttack = true;
     public float attackCooldown = 2f;
 
+    [Header("Other")]
+    public float xpGiven;
+
     [Header("Color Refs")]
     public Color original;
     public Color damaged;
@@ -30,6 +36,7 @@ public class Enemy : MonoBehaviour
     //[Header("Refs")]
     private PlayerStats ps;
     private GameObject enemy;
+    private GameManager gm;
 
 
     private void Start()
@@ -38,6 +45,8 @@ public class Enemy : MonoBehaviour
         enemy = gameObject;
         spriteRenderer = enemy.GetComponent<SpriteRenderer>();
         original = spriteRenderer.color;
+
+        gm = FindObjectOfType<GameManager>();
 
         player = GameObject.Find("Bee");
 
@@ -53,7 +62,13 @@ public class Enemy : MonoBehaviour
         playerPos = player.transform;
 
         if (health <= 0)
+        {
+            gm.xpCurrent += xpGiven;
+            gm.UpdateUI();
             Destroy(gameObject);
+            
+        }
+
 
         if (playerPos != null )
         {
@@ -69,23 +84,14 @@ public class Enemy : MonoBehaviour
             else
                 gameObject.transform.localScale = new Vector3(1f, 1f, 1f);
 
-            
-
-
             Vector2 playerP = playerPos.position;
             Vector2 enemyPos = transform.position;
             Vector2 newPos = Vector2.MoveTowards(enemyPos, playerP, (speed * Time.deltaTime));
-            transform.position = newPos;
-
-
-            
+            transform.position = newPos;    
         }
 
         if (takenDamage)
         {
-           
-            
-
             spriteRenderer.color = damaged;
             takenDamage = false;
             Invoke("ResetColour", 0.1f);

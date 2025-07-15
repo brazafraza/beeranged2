@@ -580,13 +580,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   health: 0
   maxHealth: 10
-  takenDamage: 0
-  original: {r: 1, g: 0.37961707, b: 0, a: 0}
-  damaged: {r: 1, g: 0, b: 0, a: 1}
-  spriteRenderer: {fileID: 0}
   playerPos: {fileID: 0}
   speed: 2
   damage: 5
+  canAttack: 1
+  attackCooldown: 2
+  xpGiven: 50
+  original: {r: 1, g: 0.37961707, b: 0, a: 0}
+  damaged: {r: 1, g: 0, b: 0, a: 1}
+  spriteRenderer: {fileID: 0}
 --- !u!212 &1673503785698596523
 SpriteRenderer:
   m_ObjectHideFlags: 0
