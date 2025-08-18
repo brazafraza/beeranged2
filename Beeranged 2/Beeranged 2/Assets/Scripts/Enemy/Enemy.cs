@@ -25,6 +25,12 @@ public class Enemy : MonoBehaviour
     [Header("UI")]
     public HealthBar2D healthBar;       // optional: child bar under enemy
 
+    [Header("Separation Blend")]
+    public EnemySeperation2D separation;   // assign the sensor on the same prefab (optional)
+    public float separationWeight = 1.0f; // how much to bend by separation
+    public float maxSpeed = 3f;          // desired chase speed
+    public float accel = 12f;            // how fast we lerp to desired
+
     private int _hp;
 
     void OnEnable()
@@ -41,11 +47,25 @@ public class Enemy : MonoBehaviour
         }
     }
 
+    
+
     void FixedUpdate()
     {
         if (_player == null) return;
-        Vector2 dir = (_player.position - transform.position).normalized;
-        rb.velocity = dir * speed;
+
+        // Base chase direction
+        Vector2 toPlayer = ((Vector2)_player.position - (Vector2)transform.position).normalized;
+        Vector2 desired = toPlayer * maxSpeed;
+
+        // Blend in separation (directional bend). Separation sensor returns a vector in "units/sec".
+        if (separation != null)
+        {
+            desired += separation.Steer * separationWeight;
+        }
+
+        // Clamp to max speed and ease in (feels smoother, avoids jitter)
+        desired = Vector2.ClampMagnitude(desired, maxSpeed);
+        rb.velocity = Vector2.Lerp(rb.velocity, desired, Mathf.Clamp01(accel * Time.fixedDeltaTime));
     }
 
     public void Hit(int dmg)

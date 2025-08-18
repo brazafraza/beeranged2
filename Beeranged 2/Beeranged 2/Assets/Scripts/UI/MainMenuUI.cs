@@ -21,7 +21,7 @@ public class MainMenuUI : MonoBehaviour
 
     [Header("Version")]
     public bool showVersionOnTitle = true;
-    public string versionString = "v0.1";
+    public string versionString = "v2.0";
 
     private void Awake()
     {
@@ -102,9 +102,9 @@ public class MainMenuUI : MonoBehaviour
                     var e = top[i];
                     sb.Append(i + 1).Append(". ")
                       .Append(FormatTime(e.seconds))
-                      .Append(" — ")
+                      .Append(" ï¿½ ")
                       .Append(string.IsNullOrEmpty(e.initials) ? "BRAZA" : e.initials)
-                      .Append(" — ")
+                      .Append(" ï¿½ ")
                       .Append(string.IsNullOrEmpty(e.date) ? "-" : e.date)
                       .AppendLine();
                 }
