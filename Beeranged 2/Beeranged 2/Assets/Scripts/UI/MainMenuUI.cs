@@ -14,10 +14,10 @@ public class MainMenuUI : MonoBehaviour
     public GameObject leaderboardPanel;
 
     [Header("Leaderboard UI")]
-    public TextMeshProUGUI bestTimeText;         // "Best: 06:42"
+    public TextMeshProUGUI bestTimeText;         
     public TextMeshProUGUI leaderboardListText;  // multi-line top 10
     [Header("Title")]
-    public TextMeshProUGUI titleText;            // game title (version appended here)
+    public TextMeshProUGUI titleText;           
 
     [Header("Version")]
     public bool showVersionOnTitle = true;

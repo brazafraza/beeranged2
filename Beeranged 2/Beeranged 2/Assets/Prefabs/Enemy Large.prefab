@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 289872787498002743}
   m_Layer: 3
   m_Name: Hitbox
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -242,6 +242,7 @@ GameObject:
   - component: {fileID: 5256346368910606474}
   - component: {fileID: 441419307777173012}
   - component: {fileID: 9142318568062113217}
+  - component: {fileID: 6269672537555133924}
   m_Layer: 3
   m_Name: Enemy Large
   m_TagString: Enemy
@@ -359,4 +360,37 @@ MonoBehaviour:
   rb: {fileID: 441419307777173012}
   speed: 3
   maxHP: 100
-  xpGemPrefab: {fileID: 4394485030373606412, guid: 965f606f48d5d0c4aa31704cf4dcb291, type: 3}
+  pool: {fileID: 0}
+  xpSmallKey: XP_S
+  xpMedKey: XP_M
+  xpLargeKey: XP_L
+  minDrops: 1
+  maxDrops: 3
+  smallWeight: 0.7
+  medWeight: 0.25
+  largeWeight: 0.05
+  dropScatterRadius: 0.4
+  healthBar: {fileID: 0}
+  separation: {fileID: 6269672537555133924}
+  separationWeight: 1
+  maxSpeed: 3
+  accel: 12
+--- !u!114 &6269672537555133924
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4487664602667079498}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a30c30906112b14a910879eef3a06eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enemyMask:
+    serializedVersion: 2
+    m_Bits: 8
+  radius: 1
+  strength: 1
+  tickInterval: 0.1
+  bufferSize: 16
