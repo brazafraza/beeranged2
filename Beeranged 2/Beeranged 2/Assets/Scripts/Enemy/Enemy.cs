@@ -11,7 +11,7 @@ public class Enemy : MonoBehaviour
     private Transform _player;
 
     [Header("XP Drops")]
-    public ObjectPool pool;             // assign your global pool
+  
     public string xpSmallKey = "XP_S";
     public string xpMedKey = "XP_M";
     public string xpLargeKey = "XP_L";
@@ -26,7 +26,7 @@ public class Enemy : MonoBehaviour
     public HealthBar2D healthBar;       // optional: child bar under enemy
 
     [Header("Separation Blend")]
-    public EnemySeperation2D separation;   // assign the sensor on the same prefab (optional)
+
     public float separationWeight = 1.0f; // how much to bend by separation
     public float maxSpeed = 3f;          // desired chase speed
     public float accel = 12f;            // how fast we lerp to desired
@@ -36,7 +36,7 @@ public class Enemy : MonoBehaviour
     void OnEnable()
     {
         _hp = maxHP;
-        pool = FindAnyObjectByType<ObjectPool>();
+      
 
         if (healthBar) healthBar.SetInstant(1f);
 
@@ -56,12 +56,6 @@ public class Enemy : MonoBehaviour
         // Base chase direction
         Vector2 toPlayer = ((Vector2)_player.position - (Vector2)transform.position).normalized;
         Vector2 desired = toPlayer * maxSpeed;
-
-        // Blend in separation (directional bend). Separation sensor returns a vector in "units/sec".
-        if (separation != null)
-        {
-            desired += separation.Steer * separationWeight;
-        }
 
         // Clamp to max speed and ease in (feels smoother, avoids jitter)
         desired = Vector2.ClampMagnitude(desired, maxSpeed);
@@ -84,7 +78,7 @@ public class Enemy : MonoBehaviour
 
     private void DropXP()
     {
-        if (pool == null) return;
+       
 
         int count = Random.Range(minDrops, maxDrops + 1);
         float wSum = Mathf.Max(0.0001f, smallWeight + medWeight + largeWeight);
@@ -102,7 +96,7 @@ public class Enemy : MonoBehaviour
             Vector2 off = Random.insideUnitCircle * dropScatterRadius;
             Vector3 pos = transform.position + (Vector3)off;
 
-            pool.Spawn(key, pos, Quaternion.identity);
+          
         }
     }
 }

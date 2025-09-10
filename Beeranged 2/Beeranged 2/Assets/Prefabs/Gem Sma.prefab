@@ -10,8 +10,8 @@ GameObject:
   m_Component:
   - component: {fileID: 7273666140536458988}
   - component: {fileID: 8361005623630840879}
-  - component: {fileID: 2341174227999167823}
   - component: {fileID: 7031197328506775483}
+  - component: {fileID: 7110144439483262679}
   m_Layer: 0
   m_Name: Gem Sma
   m_TagString: Untagged
@@ -76,7 +76,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 1
   m_Sprite: {fileID: 21300000, guid: 19f4a1851077a3645b4e3979567cc95e, type: 3}
-  m_Color: {r: 0.9798496, g: 1, b: 0.2235294, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -86,19 +86,6 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
---- !u!114 &2341174227999167823
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4078513268621553248}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d9ce1e7a8f621ee4b879aa481e799eee, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  xpValue: 1
 --- !u!61 &7031197328506775483
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -144,3 +131,16 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
+--- !u!114 &7110144439483262679
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4078513268621553248}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb199ae04f1291744a75d48e4f2037af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  itemSO: {fileID: 11400000, guid: 2e494c8c501a56c408050715cd77c4a2, type: 2}

@@ -1,49 +1,57 @@
-using System.Collections.Generic;
 using UnityEngine;
 
-public enum ItemRarity { Common, Uncommon, Rare, Epic, Legendary }
-
-public enum ItemEffectType
-{
-    // Stat mods
-    DamageFlat,
-    DamageMultiplierPercent,
-    FireRateFlat,
-    BulletSpeedFlat,
-    ClosestEnemyRangeFlat,
-    PickupRadiusFlat,
-    MoveSpeedFlat,
-    MaxHPFlat,
-
-    // One-shot on pick
-    HealPercentOnPick,
-
-    // Unique behaviours (toggle-on; Inventory will enable matching components)
-    Enable_PollenAura,
-    Enable_ExplodingShots,     // placeholder for later
-    Enable_RoyalGuardShields   // placeholder for later
-}
-
-[System.Serializable]
-public struct ItemEffect
-{
-    public ItemEffectType type;
-    public float value; // meaning depends on type (e.g., +2 dmg, +15% mult, +0.5 radius, etc.)
-}
-
-[CreateAssetMenu(fileName = "NewItem", menuName = "Items/Item")]
+[CreateAssetMenu(fileName = "New Item", menuName = "Inventory/Item")]
 public class ItemSO : ScriptableObject
 {
-    [Header("Identity")]
-    public string id;                // optional unique id (leave blank if not needed)
-    public string displayName;
-    [TextArea] public string description;
+    public enum PlayerStatType
+    {
+        MoveSpeed,
+        Damage,
+        MaxHP,
+        PickupRadius,
+        AttackSpeed,
+        JumpForce,
+        Other
+    }
+
+    public string itemName;
+    public string description;
     public Sprite icon;
-    public ItemRarity rarity = ItemRarity.Common;
 
-    [Header("Rules")]
-    [Range(1, 10)] public int maxStack = 5;
+    public bool modifiesStats;
+    public PlayerStatType statType;
+    public float modifierAmount = 1f;
 
-    [Header("Effects")]
-    public List<ItemEffect> effects = new List<ItemEffect>();
+    public GameObject abilityPrefab;
+
+    // Used by PlayerStats.RecalculateStats()
+    public virtual void ApplyStatModifier(PlayerStats stats)
+    {
+        if (!modifiesStats) return;
+
+        switch (statType)
+        {
+            case PlayerStatType.MoveSpeed:
+                stats.moveSpeed += modifierAmount;
+                break;
+            case PlayerStatType.Damage:
+                stats.damage += Mathf.RoundToInt(modifierAmount);
+                break;
+            case PlayerStatType.MaxHP:
+                stats.maxHP += Mathf.RoundToInt(modifierAmount);
+                break;
+            case PlayerStatType.PickupRadius:
+                stats.pickupRadius += modifierAmount;
+                break;
+            case PlayerStatType.AttackSpeed:
+                stats.damageMultiplier += modifierAmount;
+                break;
+            case PlayerStatType.Other:
+                //get specific here;
+                break;
+            case PlayerStatType.JumpForce:
+                stats.jumpForce += modifierAmount;
+                break;
+        }
+    }
 }

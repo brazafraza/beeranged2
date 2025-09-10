@@ -5,34 +5,47 @@ using TMPro;
 
 public class PlayerStats : MonoBehaviour
 {
+
     [Header("Health")]
-    public int maxHP = 100;
-    public float invulnOnHit = 0.15f;         // short i-frames after getting hit
-    public Slider hpBar;                       // optional UI; leave null if not used
-    public TextMeshProUGUI hpTextTMP;          // optional TMP label: "HP: X / Y"
+    public int baseMaxHP = 100;
+    public float invulnOnHit = 0.15f;
+    public Slider hpBar;
+    public TextMeshProUGUI hpTextTMP;
 
-    [Header("Core Stats")]
-    public float moveSpeed = 6f;
+    [Header("Core Stats (Base Values)")]
+    public float baseMoveSpeed = 6f;
+    public float baseJumpForce = 6f;
     public int baseDamage = 5;
-    public float damageMultiplier = 1f;
-    public float pickupRadius = 1.5f;
+    public float basePickupRadius = 1.5f;
 
-    [Header("Feedback (optional)")]
-    public SpriteRenderer flashSprite;         // assign if you want a quick white flash
+    [Header("Current (Calculated) Stats")]
+    public int maxHP;
+    public float moveSpeed;
+    public float jumpForce;
+    public int damage;
+    public float pickupRadius;
+    public float damageMultiplier = 1f;
+
+    [Header("Feedback")]
+    public SpriteRenderer flashSprite;
     public float flashDuration = 0.05f;
 
-    public event Action<int, int> OnHealthChanged; // (current, max)
+    public event Action<int, int> OnHealthChanged;
     public event Action OnDied;
 
     public int CurrentHP { get; private set; }
     public bool IsAlive => CurrentHP > 0;
 
     private float _invulnTimer;
+    private InventorySystem inventory;
 
     void Awake()
     {
-        maxHP = Mathf.Max(1, maxHP);
-        CurrentHP = Mathf.Clamp(CurrentHP <= 0 ? maxHP : CurrentHP, 0, maxHP);
+        inventory = GetComponent<InventorySystem>();
+
+        RecalculateStats(); // Init stats
+
+        CurrentHP = maxHP;
         UpdateHPUI();
     }
 
@@ -41,19 +54,14 @@ public class PlayerStats : MonoBehaviour
         if (_invulnTimer > 0f) _invulnTimer -= Time.deltaTime;
     }
 
-    /// <summary>Enemies (or hazards) call this to hurt the player.</summary>
     public void TakeDamage(int amount)
     {
-        if (!IsAlive) return;
-        if (_invulnTimer > 0f) return;
+        if (!IsAlive || _invulnTimer > 0f) return;
 
         int dmg = Mathf.Max(0, amount);
-        if (dmg == 0) return;
-
         CurrentHP = Mathf.Max(0, CurrentHP - dmg);
         _invulnTimer = invulnOnHit;
 
-        // optional quick flash
         if (flashSprite != null) StartCoroutine(FlashCR());
 
         UpdateHPUI();
@@ -61,14 +69,12 @@ public class PlayerStats : MonoBehaviour
         if (CurrentHP == 0)
         {
             OnDied?.Invoke();
-            // TODO: disable input / show game over, etc.
         }
     }
 
     public void Heal(int amount)
     {
-        if (!IsAlive) return;
-        if (amount <= 0) return;
+        if (!IsAlive || amount <= 0) return;
 
         CurrentHP = Mathf.Min(maxHP, CurrentHP + amount);
         UpdateHPUI();
@@ -76,8 +82,49 @@ public class PlayerStats : MonoBehaviour
 
     public int GetDamageOutput()
     {
-        // Central place to compute outgoing damage
-        return Mathf.RoundToInt(baseDamage * Mathf.Max(0.1f, damageMultiplier));
+        return Mathf.RoundToInt(damage * Mathf.Max(0.1f, damageMultiplier));
+    }
+
+    public void RecalculateStats()
+    {
+        // Start from base
+        moveSpeed = baseMoveSpeed;
+        jumpForce = baseJumpForce;
+        damage = baseDamage;
+        maxHP = baseMaxHP;
+        pickupRadius = basePickupRadius;
+        damageMultiplier = 1f;
+
+        // Add modifiers from all items
+        if (inventory != null)
+        {
+            foreach (var stack in inventory.activeItems)
+            {
+                for (int i = 0; i < stack.count; i++)
+                {
+                    stack.item.ApplyStatModifier(this);
+                }
+            }
+        }
+
+        // Clamp HP
+        CurrentHP = Mathf.Clamp(CurrentHP, 0, maxHP);
+        UpdateHPUI();
+
+        // Push updated stats to controller
+        PlayerController controller = GetComponent<PlayerController>();
+        if (controller != null)
+        {
+            controller.SyncStatsFromPlayerStats();
+        }
+    }
+
+
+    public void SetCurrentHPRaw(int newHP, bool clampToMax = true, bool suppressFeedback = true)
+    {
+        int target = clampToMax ? Mathf.Clamp(newHP, 0, maxHP) : newHP;
+        CurrentHP = target;
+        OnHealthChanged?.Invoke(CurrentHP, maxHP);
     }
 
     private void UpdateHPUI()
@@ -92,24 +139,8 @@ public class PlayerStats : MonoBehaviour
 
         if (hpTextTMP != null)
         {
-            // Keep it simple/clear for mobile
             hpTextTMP.text = $"HP: {CurrentHP} / {maxHP}";
         }
-    }
-    // Sets CurrentHP directly (for inventory/maxHP changes) without flashes/i-frames.
-    // Call this instead of TakeDamage/Heal when adjusting after stat recalculation.
-    public void SetCurrentHPRaw(int newHP, bool clampToMax = true, bool suppressFeedback = true)
-    {
-        int target = clampToMax ? Mathf.Clamp(newHP, 0, maxHP) : newHP;
-        CurrentHP = target;
-
-        // If you ever add death checks here, keep them gated by suppressFeedback if needed.
-        // e.g., if (!suppressFeedback && CurrentHP <= 0) { ... }
-
-        // Ensure UI refresh
-        OnHealthChanged?.Invoke(CurrentHP, maxHP);
-        // If you also use a Slider/TMP directly, your existing UpdateHPUI will cover it;
-        // call it here if it's public. If it's private, the event + your UI listeners are enough.
     }
 
     private System.Collections.IEnumerator FlashCR()
@@ -121,22 +152,20 @@ public class PlayerStats : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    // Keep UI in sync when tweaking in Inspector
     void OnValidate()
     {
-        if (maxHP < 1) maxHP = 1;
-        if (Application.isPlaying) return;
+        if (!Application.isPlaying)
+        {
+            if (hpBar != null)
+            {
+                hpBar.maxValue = baseMaxHP;
+                hpBar.value = baseMaxHP;
+            }
 
-        // Preview values in editor if assigned
-        if (hpBar != null)
-        {
-            hpBar.maxValue = maxHP;
-            hpBar.value = Mathf.Clamp(CurrentHP == 0 ? maxHP : CurrentHP, 0, maxHP);
-        }
-        if (hpTextTMP != null)
-        {
-            int preview = Mathf.Clamp(CurrentHP == 0 ? maxHP : CurrentHP, 0, maxHP);
-            hpTextTMP.text = $"HP: {preview} / {maxHP}";
+            if (hpTextTMP != null)
+            {
+                hpTextTMP.text = $"HP: {baseMaxHP} / {baseMaxHP}";
+            }
         }
     }
 #endif

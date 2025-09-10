@@ -33,19 +33,22 @@ public class LevelUpPanel : MonoBehaviour
     {
         Hide();
 
-        if (optionButton1) optionButton1.onClick.AddListener(() => Choose(0));
-        if (optionButton2) optionButton2.onClick.AddListener(() => Choose(1));
-        if (optionButton3) optionButton3.onClick.AddListener(() => Choose(2));
+        optionButton1?.onClick.AddListener(() => Choose(0));
+        optionButton2?.onClick.AddListener(() => Choose(1));
+        optionButton3?.onClick.AddListener(() => Choose(2));
     }
 
+    /// <summary>
+    /// Shows the upgrade panel with 1–3 options.
+    /// </summary>
     public void Show(ItemSO[] options, Action<ItemSO> onChoose)
     {
         _options = options;
         _onChoose = onChoose;
 
-        SetupOption(0, options);
-        SetupOption(1, options);
-        SetupOption(2, options);
+        SetupOption(0, options.Length > 0 ? options[0] : null);
+        SetupOption(1, options.Length > 1 ? options[1] : null);
+        SetupOption(2, options.Length > 2 ? options[2] : null);
 
         if (root) root.SetActive(true);
         else gameObject.SetActive(true);
@@ -57,28 +60,38 @@ public class LevelUpPanel : MonoBehaviour
         else gameObject.SetActive(false);
     }
 
-    private void Choose(int i)
+    private void Choose(int index)
     {
-        ItemSO pick = null;
-        if (_options != null && i >= 0 && i < _options.Length)
-            pick = _options[i];
+        if (_options != null && index >= 0 && index < _options.Length)
+        {
+            _onChoose?.Invoke(_options[index]);
+        }
 
-        _onChoose?.Invoke(pick);
+        Hide();
     }
 
-    private void SetupOption(int i, ItemSO[] options)
+    private void SetupOption(int index, ItemSO item)
     {
-        ItemSO item = (options != null && i < options.Length) ? options[i] : null;
+        Button btn = index == 0 ? optionButton1 : index == 1 ? optionButton2 : optionButton3;
+        Image icon = index == 0 ? optionIcon1 : index == 1 ? optionIcon2 : optionIcon3;
+        TextMeshProUGUI name = index == 0 ? optionName1 : index == 1 ? optionName2 : optionName3;
+        TextMeshProUGUI desc = index == 0 ? optionDesc1 : index == 1 ? optionDesc2 : optionDesc3;
 
-        var btn = i == 0 ? optionButton1 : i == 1 ? optionButton2 : optionButton3;
-        var icon = i == 0 ? optionIcon1 : i == 1 ? optionIcon2 : optionIcon3;
-        var name = i == 0 ? optionName1 : i == 1 ? optionName2 : optionName3;
-        var desc = i == 0 ? optionDesc1 : i == 1 ? optionDesc2 : optionDesc3;
+        bool hasItem = item != null;
 
-        if (btn) btn.interactable = item != null;
-        if (icon) icon.sprite = item ? item.icon : null;
-        if (icon) icon.enabled = item != null;
-        if (name) name.text = item ? item.displayName : "--";
-        if (desc) desc.text = item ? item.description : "";
+        if (btn)
+        {
+            btn.interactable = hasItem;
+            btn.gameObject.SetActive(hasItem);
+        }
+
+        if (icon)
+        {
+            icon.sprite = hasItem ? item.icon : null;
+            icon.enabled = hasItem;
+        }
+
+        if (name) name.text = hasItem ? item.itemName : "--";
+        if (desc) desc.text = hasItem ? item.description : "";
     }
 }

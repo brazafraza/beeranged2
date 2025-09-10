@@ -20,22 +20,19 @@ public class Bullet : MonoBehaviour
     public int pierce = 0;
 
     private int _damage;
-    private ObjectPool _pool;
-    private string _key;
     private float _t;
 
     public void Launch(
-        Vector2 dir, float speed, int damage, ObjectPool pool, string key,
+        Vector2 dir, float speed, int damage,
         bool enableHoming = false, Transform target = null, float homingStrengthOverride = -1f)
     {
         _damage = damage;
-        _pool = pool;
-        _key = key;
         _t = 0f;
 
         Vector2 n = (dir.sqrMagnitude > 0.000001f) ? dir.normalized : Vector2.right;
 
-        if (rb != null) rb.velocity = n * speed;
+        if (rb != null)
+            rb.velocity = n * speed;
 
         transform.up = n;
         if (Mathf.Abs(rotationOffsetDeg) > 0.001f)
@@ -54,53 +51,41 @@ public class Bullet : MonoBehaviour
         }
 
         _t += Time.deltaTime;
-        if (_t >= life) Despawn();
+        if (_t >= life)
+        {
+            Destroy(gameObject);
+        }
     }
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        // Try generic
-        IDamageable dmg;
-        if (other.TryGetComponent(out dmg))
-        {
-            dmg.TakeDamage(_damage);
-            OnBulletHit?.Invoke(transform.position, _damage);
-            HandlePierceOrDespawn();
-            return;
-        }
+       
 
-        // Fallback: your existing Enemy class
+        // Fallback: specific Enemy class
         Enemy e = other.GetComponent<Enemy>();
         if (e == null) e = other.GetComponentInParent<Enemy>();
         if (e != null)
         {
             e.Hit(_damage);
             OnBulletHit?.Invoke(transform.position, _damage);
-            HandlePierceOrDespawn();
+            HandlePierceOrDestroy();
         }
     }
 
-    void HandlePierceOrDespawn()
+    void HandlePierceOrDestroy()
     {
         if (pierce > 0)
         {
             pierce--;
             return;
         }
-        Despawn();
-    }
 
-    void Despawn()
-    {
-        if (_pool != null && !string.IsNullOrEmpty(_key))
-            _pool.Despawn(_key, gameObject);
-        else
-            gameObject.SetActive(false);
+        Destroy(gameObject);
     }
 
     void OnDisable()
     {
-        if (rb != null) rb.velocity = Vector2.zero;
-        // pierce remains as prefab default; set per-shot from the shooter if needed.
+        if (rb != null)
+            rb.velocity = Vector2.zero;
     }
 }

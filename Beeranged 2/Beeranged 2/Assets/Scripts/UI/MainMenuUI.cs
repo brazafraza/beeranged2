@@ -35,10 +35,10 @@ public class MainMenuUI : MonoBehaviour
         if (showVersionOnTitle && titleText != null)
         {
             string baseTitle = string.IsNullOrEmpty(titleText.text) ? "Beeranged" : titleText.text;
-            titleText.text = $"{baseTitle}  {versionString}";
+            titleText.text = $"{baseTitle} {versionString}";
         }
 
-        RefreshLeaderboard();
+        
     }
 
     // ---------- Buttons ----------
@@ -50,16 +50,7 @@ public class MainMenuUI : MonoBehaviour
             Debug.LogWarning("MainMenuUI: gameSceneName is empty.");
     }
 
-    public void OnOpenLeaderboard()
-    {
-        if (mainPanel) mainPanel.SetActive(false);
-        if (leaderboardPanel) leaderboardPanel.SetActive(true);
-
-        // Hide the title while viewing the leaderboard
-        if (titleText) titleText.gameObject.SetActive(false);
-
-        RefreshLeaderboard();
-    }
+  
 
     public void OnBackToMenu()
     {
@@ -70,48 +61,7 @@ public class MainMenuUI : MonoBehaviour
         if (titleText) titleText.gameObject.SetActive(true);
     }
 
-    public void OnResetLeaderboard()
-    {
-        SaveService.ResetLeaderboard();
-        RefreshLeaderboard();
-    }
-
-    // ---------- Helpers ----------
-    private void RefreshLeaderboard()
-    {
-        // Best
-        if (bestTimeText)
-        {
-            float best = SaveService.Data.bestTimeSeconds;
-            bestTimeText.text = $"Best: {FormatTime(best)}";
-        }
-
-        // Top 10 list
-        if (leaderboardListText)
-        {
-            List<SaveService.LeaderboardEntry> top = SaveService.GetTopEntries();
-            if (top.Count == 0)
-            {
-                leaderboardListText.text = "No runs yet.";
-            }
-            else
-            {
-                var sb = new StringBuilder();
-                for (int i = 0; i < top.Count; i++)
-                {
-                    var e = top[i];
-                    sb.Append(i + 1).Append(". ")
-                      .Append(FormatTime(e.seconds))
-                      .Append(" � ")
-                      .Append(string.IsNullOrEmpty(e.initials) ? "BRAZA" : e.initials)
-                      .Append(" � ")
-                      .Append(string.IsNullOrEmpty(e.date) ? "-" : e.date)
-                      .AppendLine();
-                }
-                leaderboardListText.text = sb.ToString();
-            }
-        }
-    }
+  
 
     private string FormatTime(float seconds)
     {

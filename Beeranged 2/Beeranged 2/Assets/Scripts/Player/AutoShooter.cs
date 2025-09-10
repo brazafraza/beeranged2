@@ -3,11 +3,15 @@ using UnityEngine;
 
 public class AutoShooter : MonoBehaviour
 {
-    public enum AimMode { ClosestEnemy, MovementDirection }
+    public enum AimMode
+    {
+        ClosestEnemy,
+        MovementDirection,
+        MouseDirection,
+        MouseDirectionOnClick // ?? NEW MODE
+    }
 
-    [Header("Pooling")]
-    public ObjectPool pool;
-    public string bulletKey = "Bullet";
+    
 
     [Header("Firing")]
     public float fireRate = 2f;
@@ -15,28 +19,33 @@ public class AutoShooter : MonoBehaviour
     public Transform muzzle;
 
     [Header("Aim Mode")]
-    public AimMode aimMode = AimMode.ClosestEnemy;
+    public AimMode aimMode = AimMode.MouseDirectionOnClick;
+
+    public bool enableHoming;
 
     [Header("Closest Enemy Settings")]
     public float closestEnemyRange = 12f;
     public LayerMask enemyMask;
-    public TargetScanner2D scanner;     // optional; if assigned, used instead of ad-hoc scans
+    public TargetScanner2D scanner;
     public bool showRangeGizmo = false;
 
     [Header("Movement Aim Settings")]
     public Rigidbody2D playerRb;
     public float moveAimDeadzone = 0.05f;
+    [Header("Muzzle Offset")]
+    public float muzzleYOffset = 0f;
 
     [Header("Multi-shot")]
     [Min(1)] public int projectileCount = 1;
-    public float spreadDegrees = 0f; // total spread across the volley
+    public float spreadDegrees = 0f;
 
     [Header("Damage")]
     public PlayerStats playerStats;
     public float weaponDamageMultiplier = 1f;
     public int weaponDamageFlat = 0;
-    public int damage = 0;                   // legacy/back-compat addition
+    public int damage = 0;
     public int fallbackDamage = 5;
+
 
     private Vector2 _lastAimDir = Vector2.right;
 
@@ -47,13 +56,32 @@ public class AutoShooter : MonoBehaviour
         if (!scanner) scanner = GetComponent<TargetScanner2D>();
         if (scanner != null)
         {
+            if (aimMode == AimMode.ClosestEnemy)
+            {
+                enableHoming = true;
+            }
             scanner.range = closestEnemyRange;
             scanner.enemyMask = enemyMask;
             scanner.ownerRb = playerRb;
         }
     }
 
-    void Start() => StartCoroutine(FireLoop());
+    void Start()
+    {
+        if (aimMode != AimMode.MouseDirectionOnClick)
+            StartCoroutine(FireLoop());
+    }
+
+    void Update()
+    {
+        if (aimMode == AimMode.MouseDirectionOnClick)
+        {
+            if (Input.GetMouseButtonDown(0)) // left click
+            {
+                TryShoot();
+            }
+        }
+    }
 
     IEnumerator FireLoop()
     {
@@ -68,8 +96,7 @@ public class AutoShooter : MonoBehaviour
     void TryShoot()
     {
         Vector3 spawnPos = muzzle ? muzzle.position : transform.position;
-
-        // --- 1) Decide aim direction ---
+        spawnPos.y += muzzleYOffset;
         Vector2 fireDir;
 
         if (aimMode == AimMode.ClosestEnemy)
@@ -88,26 +115,70 @@ public class AutoShooter : MonoBehaviour
                 fireDir = _lastAimDir;
             }
         }
+        else if (aimMode == AimMode.MouseDirection || aimMode == AimMode.MouseDirectionOnClick)
+        {
+            Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            fireDir = mouseWorld - transform.position;
+
+            // ? Clamp to LEFT or RIGHT only
+            fireDir = (fireDir.x < 0) ? Vector2.left : Vector2.right;
+
+            _lastAimDir = fireDir;
+        }
         else // MovementDirection
         {
             Vector2 move = playerRb ? playerRb.velocity : Vector2.zero;
             if (move.magnitude > moveAimDeadzone) _lastAimDir = move.normalized;
             if (_lastAimDir.sqrMagnitude < 0.0001f) return;
             fireDir = _lastAimDir;
+
+            // ? Clamp to horizontal only
+            fireDir = (fireDir.x < 0) ? Vector2.left : Vector2.right;
+            _lastAimDir = fireDir;
         }
 
-        // --- 2) Damage calc ---
+        // ? Flip sprite based on fireDir.x
+        var player = GetComponent<PlayerController>();
+        if (player != null)
+        {
+            player.SetAttacking(true);
+            Invoke(nameof(ResetAttackState), 0.2f);
+
+            // Flip based on shooting direction
+            if (player.spriteRenderer != null)
+            {
+                bool movingLeft = (_lastAimDir.x < 0);
+                if (player.invertFlip) movingLeft = !movingLeft;
+                if (player.useSpriteFlip)
+                {
+                    player.spriteRenderer.flipX = movingLeft;
+                }
+                else if (player.spriteRoot != null)
+                {
+                    Vector3 s = player.spriteRoot.localScale;
+                    s.x = Mathf.Abs(s.x) * (movingLeft ? -1f : 1f);
+                    player.spriteRoot.localScale = s;
+                }
+            }
+        }
+
         int baseDmg = playerStats ? playerStats.GetDamageOutput() : fallbackDamage;
         int finalDmg = Mathf.Max(1, Mathf.RoundToInt(baseDmg * Mathf.Max(0.1f, weaponDamageMultiplier)) + weaponDamageFlat + damage);
 
-        // --- 3) Fire burst with spread ---
         FireBurst(spawnPos, fireDir.normalized, finalDmg);
+    }
+
+
+    void ResetAttackState()
+    {
+        var player = GetComponent<PlayerController>();
+        if (player != null)
+            player.SetAttacking(false);
     }
 
     void FireBurst(Vector3 spawnPos, Vector2 baseDir, int damage)
     {
-        if (pool == null) return;
-
+       
         int count = Mathf.Max(1, projectileCount);
         float totalSpread = Mathf.Max(0f, spreadDegrees);
         float step = (count > 1) ? totalSpread / (count - 1) : 0f;
@@ -118,15 +189,8 @@ public class AutoShooter : MonoBehaviour
             float angle = start + step * i;
             Vector2 dir = Quaternion.Euler(0, 0, angle) * baseDir;
 
-            GameObject obj = pool.Spawn(bulletKey, spawnPos, Quaternion.identity);
-            if (!obj) continue;
-
-            Bullet b = obj.GetComponent<Bullet>();
-            if (b != null)
-            {
-                // If you add per-weapon pierce, set b.pierce here before Launch
-                b.Launch(dir, bulletSpeed, damage, pool, bulletKey, false, null, -1f);
-            }
+            
+           
         }
     }
 

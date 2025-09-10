@@ -1,111 +1,263 @@
-using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
-    public float moveSpeed = 6f;
+    public float moveSpeed = 8f;
+    public float jumpForce = 12f;
     public Rigidbody2D rb;
-    public VirtualJoystick joystick;
+    private PlayerStats stats;
 
-    [Header("Visual Flip (no root scaling)")]
-    public Transform spriteRoot;             // child that contains visuals (if not using SpriteRenderer.flipX)
-    public SpriteRenderer spriteRenderer;    // preferred: flipX only mirrors the sprite, not the transform
-    public bool useSpriteFlip = true;        // true = use SpriteRenderer.flipX, false = flip spriteRoot.localScale.x
-    public bool invertFlip = false;          // tick if your art faces left by default (swaps left/right)
-    public float flipDeadzone = 0.05f;       // ignore tiny jitters
+    [Header("Ground & Wall Check")]
+    public Transform groundCheck;
+    public float groundCheckRadius = 0.1f;
+    public LayerMask groundLayer; // Only ground (no walls)
+    public LayerMask wallLayer;
 
-    [Header("Aiming (scan nearest)")]
-    public float aimScanInterval = 0.1f;
-    public float aimRange = 12f;
-    public LayerMask enemyMask;
+    private bool isGrounded;
+    private bool wasGroundedLastFrame;
 
-    private Vector2 _move;
-    private Vector2 _aimDir = Vector2.right;
+    [Header("Jump Recovery")]
+    public Transform lastJumpPoint;
+    public Transform fallbackPoint;
+    public float jumpOffsetX = 0.6f;
+
+    private int _facingDirection = 1; // 1 = right, -1 = left
+
+    [Header("Visual Flip")]
+    public Transform spriteRoot;
+    public SpriteRenderer spriteRenderer;
+    public bool useSpriteFlip = true;
+    public bool invertFlip = false;
+
+    [Header("Sprites")]
+    public Sprite idleSprite;
+    public Sprite attackSprite;
+
+    [Header("Walk Animation")]
+    public List<Sprite> walkFrames = new List<Sprite>();
+    public float walkAnimFPS = 6f;
+    private float walkAnimTimer;
+    private int currentWalkFrame;
+
+    [Header("Jump Animation")]
+    public List<Sprite> jumpFrames = new List<Sprite>();
+    public float jumpAnimFPS = 6f;
+    private float jumpAnimTimer;
+    private int currentJumpFrame;
+    private bool isJumpAnimating;
+
     private float _initialSpriteScaleX = 1f;
+    private float moveInput;
+    private bool isAttacking;
+
+    private SpriteRenderer sr;
+    private GameManager gm;
 
     void Awake()
     {
-        if (!rb) rb = GetComponent<Rigidbody2D>();
+        stats = GetComponent<PlayerStats>(); // NEW
 
-        // Cache initial X scale magnitude for spriteRoot flipping
+        if (stats != null)
+        {
+            SyncStatsFromPlayerStats(); // Get initial values
+        }
+
+        gm = FindAnyObjectByType<GameManager>();
+        if (!rb) rb = GetComponent<Rigidbody2D>();
+        sr = spriteRenderer != null ? spriteRenderer : GetComponent<SpriteRenderer>();
+
         if (spriteRoot != null)
         {
             float x = spriteRoot.localScale.x;
             _initialSpriteScaleX = Mathf.Approximately(x, 0f) ? 1f : Mathf.Abs(x);
         }
-    }
 
-    void Start()
-    {
-        StartCoroutine(AimScanLoop());
+        // Create lastJumpPoint if missing
+        if (lastJumpPoint == null)
+        {
+            GameObject jumpPointObj = new GameObject("LastJumpPoint");
+            lastJumpPoint = jumpPointObj.transform;
+
+            if (gm != null)
+                gm.tpDest = jumpPointObj.transform;
+
+            lastJumpPoint.position = fallbackPoint != null
+                ? fallbackPoint.position
+                : transform.position;
+        }
     }
 
     void Update()
     {
-        Vector2 j = joystick != null ? joystick.Read() : Vector2.zero;
-        _move = j.normalized * moveSpeed;
+        moveInput = Input.GetAxisRaw("Horizontal");
+
+        // Wall-stick fix
+        if ((IsTouchingWall(Vector2.left) && moveInput < 0) || (IsTouchingWall(Vector2.right) && moveInput > 0))
+        {
+            moveInput = 0f;
+        }
+
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+
+        bool justLeftGround = wasGroundedLastFrame && !isGrounded;
+        bool justLanded = !wasGroundedLastFrame && isGrounded;
+
+        if (justLeftGround)
+        {
+            StartJumpAnimation();
+
+            // Set facing direction at the time of jump
+            if (moveInput != 0)
+                _facingDirection = moveInput > 0 ? -1 : 1;
+
+            if (lastJumpPoint != null)
+            {
+                Vector2 offset = new Vector2(jumpOffsetX * _facingDirection, 0f);
+                lastJumpPoint.position = (Vector2)transform.position + offset;
+                Debug.Log("Set LastJumpPoint with offset: " + lastJumpPoint.position);
+            }
+        }
+
+        if (justLanded)
+        {
+            StopJumpAnimation();
+        }
+
+        if (Input.GetButtonDown("Jump") && isGrounded)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+        }
+
+        HandleVisualFlip();
+        HandleSpriteChange();
+
+        wasGroundedLastFrame = isGrounded;
     }
 
     void FixedUpdate()
     {
-        rb.velocity = _move;
+        rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
+    }
 
-        // Optional: rotate the body toward aim
-        if (_aimDir.sqrMagnitude > 0.0001f)
+    public void SyncStatsFromPlayerStats()
+    {
+        if (stats == null) return;
+
+        moveSpeed = stats.moveSpeed;
+        jumpForce = stats.jumpForce;
+    }
+
+    void HandleVisualFlip()
+    {
+        if (Mathf.Abs(moveInput) > 0.01f)
         {
-            float angle = Mathf.Atan2(_aimDir.y, _aimDir.x) * Mathf.Rad2Deg;
-            rb.MoveRotation(angle);
+            bool movingLeft = moveInput < 0f;
+            if (invertFlip) movingLeft = !movingLeft;
+
+            if (useSpriteFlip && sr != null)
+            {
+                sr.flipX = movingLeft;
+            }
+            else if (spriteRoot != null)
+            {
+                var s = spriteRoot.localScale;
+                s.x = _initialSpriteScaleX * (movingLeft ? -1f : 1f);
+                spriteRoot.localScale = s;
+            }
         }
     }
 
-    void LateUpdate()
+    void HandleSpriteChange()
     {
-        // Decide facing from velocity first; fallback to input X if needed
-        float vx = rb != null ? rb.velocity.x : 0f;
-        if (Mathf.Abs(vx) < flipDeadzone && _move.sqrMagnitude > 0.0001f)
-            vx = _move.x;
-
-        if (Mathf.Abs(vx) < flipDeadzone)
-            return; // no strong intent; keep current facing
-
-        bool movingLeft = vx < 0f;
-        if (invertFlip) movingLeft = !movingLeft;
-
-        if (useSpriteFlip && spriteRenderer != null)
+        if (isAttacking && attackSprite != null)
         {
-            // Cleanest: flips only the rendered pixels; world-space UI won’t mirror
-            spriteRenderer.flipX = movingLeft;
+            sr.sprite = attackSprite;
+            return;
         }
-        else if (spriteRoot != null)
+
+        if (isJumpAnimating && jumpFrames.Count > 0)
         {
-            // Flip only the visuals child scale; root stays (1,1,1)
-            var s = spriteRoot.localScale;
-            s.x = _initialSpriteScaleX * (movingLeft ? -1f : 1f);
-            spriteRoot.localScale = s;
+            float frameDuration = 1f / Mathf.Max(1f, jumpAnimFPS);
+
+            if (currentJumpFrame < jumpFrames.Count - 1)
+            {
+                jumpAnimTimer += Time.deltaTime;
+
+                if (jumpAnimTimer >= frameDuration)
+                {
+                    jumpAnimTimer = 0f;
+                    currentJumpFrame++;
+                    if (currentJumpFrame >= jumpFrames.Count)
+                        currentJumpFrame = jumpFrames.Count - 1;
+                }
+            }
+
+            sr.sprite = jumpFrames[currentJumpFrame];
+            return;
         }
-        // If neither spriteRenderer nor spriteRoot is assigned, nothing to flip (safe no-op).
+
+        if (Mathf.Abs(moveInput) > 0.01f && walkFrames.Count > 0)
+        {
+            walkAnimTimer += Time.deltaTime;
+            float frameDuration = 1f / Mathf.Max(1f, walkAnimFPS);
+
+            if (walkAnimTimer >= frameDuration)
+            {
+                walkAnimTimer = 0f;
+                currentWalkFrame = (currentWalkFrame + 1) % walkFrames.Count;
+            }
+
+            sr.sprite = walkFrames[currentWalkFrame];
+        }
+        else
+        {
+            walkAnimTimer = 0f;
+            currentWalkFrame = 0;
+            if (idleSprite != null)
+                sr.sprite = idleSprite;
+        }
     }
 
-    private IEnumerator AimScanLoop()
+    void StartJumpAnimation()
     {
-        WaitForSeconds wait = new WaitForSeconds(aimScanInterval);
-        while (true)
+        isJumpAnimating = true;
+        currentJumpFrame = 0;
+        jumpAnimTimer = 0f;
+    }
+
+    void StopJumpAnimation()
+    {
+        isJumpAnimating = false;
+    }
+
+    public void SetAttacking(bool value)
+    {
+        isAttacking = value;
+    }
+
+    bool IsTouchingWall(Vector2 dir)
+    {
+        return Physics2D.Raycast(transform.position, dir, 0.1f, wallLayer);
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (groundCheck != null)
         {
-            Collider2D nearest = null;
-            float best = 99999f;
-            Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, aimRange, enemyMask);
-            for (int i = 0; i < hits.Length; i++)
-            {
-                float d = (hits[i].transform.position - transform.position).sqrMagnitude;
-                if (d < best) { best = d; nearest = hits[i]; }
-            }
-            if (nearest != null)
-            {
-                Vector2 dir = (nearest.transform.position - transform.position);
-                if (dir.sqrMagnitude > 0.0001f) _aimDir = dir.normalized;
-            }
-            yield return wait;
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
+        }
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(transform.position, transform.position + Vector3.left * 0.1f);
+        Gizmos.DrawLine(transform.position, transform.position + Vector3.right * 0.1f);
+
+        if (lastJumpPoint != null)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(lastJumpPoint.position, 0.2f);
         }
     }
 }
