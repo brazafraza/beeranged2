@@ -14,15 +14,28 @@ public class ItemSO : ScriptableObject
         Other
     }
 
+    public enum ItemClass
+    {
+        Winged,
+        Predator,
+        Metamorph,
+        Swarm,
+        Dancer
+    }
+
     public string itemName;
     public string description;
     public Sprite icon;
+    public ItemClass itemClass;
 
     public bool modifiesStats;
     public PlayerStatType statType;
     public float modifierAmount = 1f;
 
     public GameObject abilityPrefab;
+
+
+    public int stability = 1;
 
     // Used by PlayerStats.RecalculateStats()
     public virtual void ApplyStatModifier(PlayerStats stats)

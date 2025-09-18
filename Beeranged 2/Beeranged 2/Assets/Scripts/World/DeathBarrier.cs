@@ -35,7 +35,7 @@ public class DeathBarrier : MonoBehaviour
         if (!collision.CompareTag("Player"))
             return;
 
-        Debug.Log("Hit barrier: " + barrierType);
+       // Debug.Log("Hit barrier: " + barrierType);
 
         PlayerController player = collision.GetComponent<PlayerController>();
         if (player == null)
@@ -51,7 +51,7 @@ public class DeathBarrier : MonoBehaviour
                 break;
 
             case BarrierType.DOT:
-                Debug.Log("DOT hit: Value = " + dotValue);
+               // Debug.Log("DOT hit: Value = " + dotValue);
                 // TODO: Add DOT system here
                 break;
 
@@ -71,7 +71,7 @@ public class DeathBarrier : MonoBehaviour
         {
             player.transform.position = target.position;
             player.rb.velocity = Vector2.zero;
-            Debug.Log("Teleported to last jump point.");
+           // Debug.Log("Teleported to last jump point.");
         }
         else
         {
@@ -87,7 +87,7 @@ public class DeathBarrier : MonoBehaviour
         {
             player.transform.position = globalDest.position;
             player.rb.velocity = Vector2.zero;
-            Debug.Log("Teleported to GameManager.tpDest.");
+            //Debug.Log("Teleported to GameManager.tpDest.");
         }
         else
         {

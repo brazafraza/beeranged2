@@ -55,6 +55,14 @@ public class PlayerController : MonoBehaviour
     private SpriteRenderer sr;
     private GameManager gm;
 
+    [Header("Pause")]
+    public bool freezePhysicsOnPause = true;   // freeze body on any pause
+    public bool keepMomentumAfterPause = false; // restore velocity on resume?
+    private Vector2 _savedVel;
+    private float _savedAngVel;
+    private float _savedGravity;
+    private bool _frozenForPause;
+
     void Awake()
     {
         stats = GetComponent<PlayerStats>(); // NEW
@@ -91,6 +99,13 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (PauseManager.IsPaused)
+        {
+     
+            return;
+        }
+            
+
         moveInput = Input.GetAxisRaw("Horizontal");
 
         // Wall-stick fix
@@ -116,7 +131,7 @@ public class PlayerController : MonoBehaviour
             {
                 Vector2 offset = new Vector2(jumpOffsetX * _facingDirection, 0f);
                 lastJumpPoint.position = (Vector2)transform.position + offset;
-                Debug.Log("Set LastJumpPoint with offset: " + lastJumpPoint.position);
+                //Debug.Log("Set LastJumpPoint with offset: " + lastJumpPoint.position);
             }
         }
 
@@ -139,6 +154,64 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
         rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
+    }
+    void OnEnable()
+    {
+        PauseManager.OnPaused += ApplyPauseFreeze;
+        PauseManager.OnResumed += RemovePauseFreeze;
+    }
+
+    void OnDisable()
+    {
+        PauseManager.OnPaused -= ApplyPauseFreeze;
+        PauseManager.OnResumed -= RemovePauseFreeze;
+    }
+
+    void ApplyPauseFreeze()
+    {
+        if (!freezePhysicsOnPause || _frozenForPause || rb == null) return;
+
+        // Save current motion
+        _savedVel = rb.velocity;
+        _savedAngVel = rb.angularVelocity;
+        _savedGravity = rb.gravityScale;
+
+        // Stop movement instantly and freeze physics
+        rb.velocity = Vector2.zero;
+        rb.angularVelocity = 0f;
+        rb.simulated = false;          // <- hard freeze for Rigidbody2D
+        _frozenForPause = true;
+
+        // Optional: stop sprite anims too
+        var anim = GetComponentInChildren<Animator>();
+        if (anim) anim.speed = 0f;
+    }
+
+    void RemovePauseFreeze()
+    {
+        if (!_frozenForPause || rb == null) return;
+
+        // Unfreeze physics
+        rb.simulated = true;
+        rb.gravityScale = _savedGravity;
+
+        // Restore or clear momentum
+        if (keepMomentumAfterPause)
+        {
+            rb.velocity = _savedVel;
+            rb.angularVelocity = _savedAngVel;
+        }
+        else
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+
+        _frozenForPause = false;
+
+        // Resume sprite anims
+        var anim = GetComponentInChildren<Animator>();
+        if (anim) anim.speed = 1f;
     }
 
     public void SyncStatsFromPlayerStats()
@@ -171,6 +244,7 @@ public class PlayerController : MonoBehaviour
 
     void HandleSpriteChange()
     {
+     
         if (isAttacking && attackSprite != null)
         {
             sr.sprite = attackSprite;

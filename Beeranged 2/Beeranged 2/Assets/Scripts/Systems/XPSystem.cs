@@ -36,7 +36,7 @@ public class XPSystem : MonoBehaviour
     void Update()
     {
         // Dev cheat: Press Escape to add XP
-        if (Input.GetKeyUp(KeyCode.Escape))
+        if (Input.GetKeyUp(KeyCode.F1))
         {
             AddXP(devAmnt);
         }

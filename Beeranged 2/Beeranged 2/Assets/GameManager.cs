@@ -6,6 +6,10 @@ public class GameManager : MonoBehaviour
 
     public Transform tpDest;
 
+    public GameObject inventoryRoot;
+    public bool inventoryOpen = false;
+    public GameObject blockint;
+
     void Awake()
     {
         // Singleton pattern (optional)
@@ -19,4 +23,29 @@ public class GameManager : MonoBehaviour
             Destroy(gameObject);
         }
     }
+
+    private void Update()
+    {
+        if (!inventoryOpen)
+        {
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                blockint.SetActive(false);
+                inventoryOpen = true;
+                inventoryRoot.SetActive(true);
+                PauseManager.SetSoftPaused(true);
+            }
+        }
+        else if (inventoryOpen)
+        {
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                blockint.SetActive(true);
+                inventoryOpen = false;
+                inventoryRoot.SetActive(false);
+                PauseManager.SetSoftPaused(false);
+            }
+        }
+
+        }
 }
