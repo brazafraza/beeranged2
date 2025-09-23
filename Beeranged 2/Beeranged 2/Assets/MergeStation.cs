@@ -32,14 +32,8 @@ public class MergeStation : MonoBehaviour
     public Button clearButton;
 
     [Header("Icons")]
-    [Tooltip("If true, skip fancy merging and always use a placeholder icon (auto tinted by quarters).")]
-    public bool forcePlaceholderIcon = true;  // default ON to avoid blanks
-    public Sprite placeholderIcon;            // optional; if null, a generated checker is used (then tinted by quarters)
-
-    [Header("Behavior")]
-    [Tooltip("Pick which icon to use if icon slicing fails or sprites are missing (when not forcing placeholder).")]
-    public IconFallback mergedIconFallback = IconFallback.UseFirstNonNull;
-    public enum IconFallback { UseFirstNonNull, UseSecondNonNull, None }
+    [Tooltip("The fallback icon used for every merged item. If null, a simple checker is generated.")]
+    public Sprite placeholderIcon;
 
     [Header("Debug")]
     public bool debugLog = false;
@@ -58,7 +52,6 @@ public class MergeStation : MonoBehaviour
     private ItemSO _lastOutput;
 
     private InventorySlotUI _slot3AsSlotUI;
-    static Material _blitMat;
 
     void Awake()
     {
@@ -86,33 +79,8 @@ public class MergeStation : MonoBehaviour
             return;
         }
 
-        // Decide icon
-        Sprite mergedIcon = null;
-
-        if (forcePlaceholderIcon)
-        {
-            var basePh = placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64);
-            mergedIcon = CreateQuarterTintedIconGPU(basePh);
-        }
-        else
-        {
-            mergedIcon = CreateMergedIcon(_ingA.item.icon, _ingB.item.icon);
-            if (!mergedIcon)
-            {
-                switch (mergedIconFallback)
-                {
-                    case IconFallback.UseSecondNonNull: mergedIcon = _ingB.item?.icon; break;
-                    case IconFallback.UseFirstNonNull:
-                    default: mergedIcon = _ingA.item?.icon ? _ingA.item.icon : _ingB.item?.icon; break;
-                    case IconFallback.None: mergedIcon = null; break;
-                }
-                if (!mergedIcon)
-                {
-                    var basePh = placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64);
-                    mergedIcon = CreateQuarterTintedIconGPU(basePh);
-                }
-            }
-        }
+        // Always use the fallback icon for the merged item
+        Sprite mergedIcon = placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64);
 
         // Create merged runtime item
         var merged = ScriptableObject.CreateInstance<MergedItemSO>();
@@ -123,8 +91,8 @@ public class MergeStation : MonoBehaviour
 
         merged.itemName = $"Merged: {nameA} + {nameB}";
         merged.description = $"Contains combined effects of {nameA} (x{_ingA.count}) and {nameB} (x{_ingB.count}).";
-        merged.icon = mergedIcon ?? (placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64)); // <- GUARANTEE not null
-        if (debugLog) Debug.Log($"[MergeStation] Merged icon set? {(merged.icon != null)}  size: {(merged.icon != null ? $"{merged.icon.texture.width}x{merged.icon.texture.height}" : "null")}");
+        merged.icon = mergedIcon;  // <- ALWAYS fallback
+        if (debugLog) Debug.Log($"[MergeStation] Merged icon set: {merged.icon != null}");
 
         merged.sources = new List<MergedItemSO.SourceStack>
         {
@@ -210,7 +178,7 @@ public class MergeStation : MonoBehaviour
         if (!droppedOnMerge)
         {
             if (inventory != null)
-                inventory.AddItem(_lastOutput); // Inventory UI will pick up item.icon
+                inventory.AddItem(_lastOutput); // Inventory UI shows fallback icon
 
             _lastOutput = null;
             if (_slot3AsSlotUI)
@@ -220,7 +188,7 @@ public class MergeStation : MonoBehaviour
             if (inventoryView) inventoryView.RebuildUI();
             if (playerStats) playerStats.RecalculateStats();
         }
-        // else: dropped back on merge panel – keep showing the result
+        // else: dropped back on merge panel â€“ keep showing the result
     }
 
     // ===================== Inventory ops (consume/return) =====================
@@ -282,9 +250,11 @@ public class MergeStation : MonoBehaviour
         // Ingredient A
         if (slot1Icon)
         {
-            slot1Icon.color = Color.white; // ensure visible
-            slot1Icon.enabled = _ingA != null && _ingA.item != null && _ingA.item.icon != null;
-            slot1Icon.sprite = (_ingA != null && _ingA.item != null) ? _ingA.item.icon : null;
+            slot1Icon.color = Color.white;
+            slot1Icon.enabled = _ingA != null && _ingA.item != null;
+            slot1Icon.sprite = slot1Icon.enabled
+                ? (_ingA.item.icon ?? placeholderIcon ?? GeneratePlaceholderSprite(32, 32))
+                : null;
         }
         if (slot1Label)
         {
@@ -293,15 +263,17 @@ public class MergeStation : MonoBehaviour
                 string nameA = string.IsNullOrEmpty(_ingA.item.itemName) ? _ingA.item.name : _ingA.item.itemName;
                 slot1Label.text = _ingA.count > 1 ? $"{nameA} x{_ingA.count}" : nameA;
             }
-            else slot1Label.text = "—";
+            else slot1Label.text = "â€”";
         }
 
         // Ingredient B
         if (slot2Icon)
         {
-            slot2Icon.color = Color.white; // ensure visible
-            slot2Icon.enabled = _ingB != null && _ingB.item != null && _ingB.item.icon != null;
-            slot2Icon.sprite = (_ingB != null && _ingB.item != null) ? _ingB.item.icon : null;
+            slot2Icon.color = Color.white;
+            slot2Icon.enabled = _ingB != null && _ingB.item != null;
+            slot2Icon.sprite = slot2Icon.enabled
+                ? (_ingB.item.icon ?? placeholderIcon ?? GeneratePlaceholderSprite(32, 32))
+                : null;
         }
         if (slot2Label)
         {
@@ -310,15 +282,17 @@ public class MergeStation : MonoBehaviour
                 string nameB = string.IsNullOrEmpty(_ingB.item.itemName) ? _ingB.item.name : _ingB.item.itemName;
                 slot2Label.text = _ingB.count > 1 ? $"{nameB} x{_ingB.count}" : nameB;
             }
-            else slot2Label.text = "—";
+            else slot2Label.text = "â€”";
         }
 
-        // Output
+        // Output (always show something if there is a result)
         if (outputIcon)
         {
-            outputIcon.color = Color.white; // ensure visible
-            outputIcon.enabled = _lastOutput != null && _lastOutput.icon != null;
-            outputIcon.sprite = _lastOutput ? (_lastOutput.icon ?? (placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64))) : null;
+            outputIcon.color = Color.white;
+            outputIcon.enabled = _lastOutput != null;
+            outputIcon.sprite = _lastOutput
+                ? (_lastOutput.icon ?? placeholderIcon ?? GeneratePlaceholderSprite(64, 64))
+                : null;
             outputIcon.preserveAspect = true;
         }
         if (outputLabel)
@@ -375,198 +349,10 @@ public class MergeStation : MonoBehaviour
         _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, item, 1);
     }
 
-    // ===================== Icon merge =====================
-    // Standard split (A left, B right) when not forcing placeholder
-    private Sprite CreateMergedIcon(Sprite a, Sprite b)
-    {
-        if (!a && !b) return null;
-
-        int outW, outH;
-        GetTargetSize(a, b, out outW, out outH);
-        outW = Mathf.Max(4, outW);
-        outH = Mathf.Max(4, outH);
-
-        bool aReadable = IsSpriteReadable(a);
-        bool bReadable = IsSpriteReadable(b);
-
-        if (aReadable || bReadable)
-        {
-            var tex = new Texture2D(outW, outH, TextureFormat.RGBA32, false, false)
-            {
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.DontSave
-            };
-
-            for (int y = 0; y < outH; y++)
-            {
-                float v = outH > 1 ? (y / (float)(outH - 1)) : 0f;
-                for (int x = 0; x < outW; x++)
-                {
-                    bool leftSide = (x < outW / 2);
-                    float uLocal = leftSide
-                        ? (outW > 2 ? (x / (float)((outW / 2) - 1)).Clamp01() : 0f)
-                        : (outW > 2 ? ((x - outW / 2) / (float)(outW - (outW / 2) - 1)).Clamp01() : 0f);
-
-                    Color c = Color.clear;
-                    if (leftSide)
-                    {
-                        if (a && aReadable) c = SampleSpriteBilinear(a, uLocal, v);
-                        else if (b && bReadable) c = SampleSpriteBilinear(b, uLocal, v);
-                    }
-                    else
-                    {
-                        if (b && bReadable) c = SampleSpriteBilinear(b, uLocal, v);
-                        else if (a && aReadable) c = SampleSpriteBilinear(a, uLocal, v);
-                    }
-                    tex.SetPixel(x, outH - 1 - y, c);
-                }
-            }
-            tex.Apply(false, false);
-
-            var sprite = Sprite.Create(tex, new Rect(0, 0, outW, outH), new Vector2(0.5f, 0.5f), GuessPPU(a, b));
-            sprite.hideFlags = HideFlags.DontSave;
-            return sprite;
-        }
-
-        return CreateMergedIconGPU(a, b, outW, outH);
-    }
-
-    private Sprite CreateMergedIconGPU(Sprite a, Sprite b, int w, int h)
-    {
-        if (!a && !b) return null;
-
-        var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
-        var prevRT = RenderTexture.active;
-        RenderTexture.active = rt;
-
-        GL.PushMatrix();
-        GL.LoadPixelMatrix(0, w, 0, h);
-        GL.Clear(true, true, new Color(0, 0, 0, 0));
-
-        if (a) DrawSpriteToRectTinted(a, new Rect(0, 0, w / 2f, h), Color.white);
-        if (b) DrawSpriteToRectTinted(b, new Rect(w / 2f, 0, w - w / 2f, h), Color.white);
-
-        GL.PopMatrix();
-
-        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false, false) { hideFlags = HideFlags.DontSave };
-        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
-        tex.Apply(false, false);
-
-        RenderTexture.active = prevRT;
-        RenderTexture.ReleaseTemporary(rt);
-
-        var sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), GuessPPU(a, b));
-        sprite.hideFlags = HideFlags.DontSave;
-        return sprite;
-    }
-
-    // Placeholder ? quarter tinted (TL, TR, BL, BR each random color), GPU path (no R/W needed)
-    private Sprite CreateQuarterTintedIconGPU(Sprite src)
-    {
-        int w = src ? Mathf.RoundToInt(src.rect.width) : 64;
-        int h = src ? Mathf.RoundToInt(src.rect.height) : 64;
-        float ppu = src ? src.pixelsPerUnit : 100f;
-
-        var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
-        var prevRT = RenderTexture.active;
-        RenderTexture.active = rt;
-
-        GL.PushMatrix();
-        GL.LoadPixelMatrix(0, w, 0, h);
-        GL.Clear(true, true, new Color(0, 0, 0, 0));
-
-        Color TL = RandomColor();
-        Color TR = RandomColor();
-        Color BL = RandomColor();
-        Color BR = RandomColor();
-
-        DrawSpriteToRectTinted(src, new Rect(0, h / 2f, w / 2f, h / 2f), TL);
-        DrawSpriteToRectTinted(src, new Rect(w / 2f, h / 2f, w / 2f, h / 2f), TR);
-        DrawSpriteToRectTinted(src, new Rect(0, 0, w / 2f, h / 2f), BL);
-        DrawSpriteToRectTinted(src, new Rect(w / 2f, 0, w / 2f, h / 2f), BR);
-
-        GL.PopMatrix();
-
-        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false, false) { hideFlags = HideFlags.DontSave };
-        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
-        tex.Apply(false, false);
-
-        RenderTexture.active = prevRT;
-        RenderTexture.ReleaseTemporary(rt);
-
-        var sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), ppu);
-        sprite.hideFlags = HideFlags.DontSave;
-        return sprite;
-    }
-
-    private static void DrawSpriteToRectTinted(Sprite s, Rect dest, Color tint)
-    {
-        if (!s || !s.texture) return;
-        Rect tr = s.textureRect;
-        Vector2 uv0 = new Vector2(tr.xMin / s.texture.width, tr.yMin / s.texture.height);
-        Vector2 uv1 = new Vector2(tr.xMax / s.texture.width, tr.yMax / s.texture.height);
-
-        var mat = GetBlitMat();
-        mat.mainTexture = s.texture;
-        mat.color = tint; // multiply color
-        mat.SetPass(0);
-
-        GL.Begin(GL.QUADS);
-        GL.TexCoord2(uv0.x, uv0.y); GL.Vertex3(dest.xMin, dest.yMin, 0);
-        GL.TexCoord2(uv1.x, uv0.y); GL.Vertex3(dest.xMax, dest.yMin, 0);
-        GL.TexCoord2(uv1.x, uv1.y); GL.Vertex3(dest.xMax, dest.yMax, 0);
-        GL.TexCoord2(uv0.x, uv1.y); GL.Vertex3(dest.xMin, dest.yMax, 0);
-        GL.End();
-    }
-
-    private static Color RandomColor()
-    {
-        Color c = Color.HSVToRGB(Random.value, Random.Range(0.65f, 1f), Random.Range(0.8f, 1f));
-        c.a = 1f;
-        return c;
-    }
-
-    private static void GetTargetSize(Sprite a, Sprite b, out int w, out int h)
-    {
-        int wa = a ? Mathf.RoundToInt(a.rect.width) : 0;
-        int ha = a ? Mathf.RoundToInt(a.rect.height) : 0;
-        int wb = b ? Mathf.RoundToInt(b.rect.width) : 0;
-        int hb = b ? Mathf.RoundToInt(b.rect.height) : 0;
-        w = Mathf.Max(wa, wb);
-        h = Mathf.Max(ha, hb);
-        if (w == 0) w = 64;
-        if (h == 0) h = 64;
-    }
-
-    private static float GuessPPU(Sprite a, Sprite b)
-    {
-        if (a && a.pixelsPerUnit > 0f) return a.pixelsPerUnit;
-        if (b && b.pixelsPerUnit > 0f) return b.pixelsPerUnit;
-        return 100f;
-    }
-
-    private static bool IsSpriteReadable(Sprite s)
-    {
-        if (!s || !s.texture) return false;
-        try { s.texture.GetPixelBilinear(0f, 0f); return true; }
-        catch { return false; }
-    }
-
-    private static Color SampleSpriteBilinear(Sprite s, float u01, float v01)
-    {
-        if (!s) return Color.clear;
-        var tex = s.texture;
-        var r = s.textureRect;
-        float u = (r.x + u01 * r.width) / tex.width;
-        float v = (r.y + v01 * r.height) / tex.height;
-        return tex.GetPixelBilinear(u, v);
-    }
-
+    // ===================== Icon helper =====================
     private Sprite GeneratePlaceholderSprite(int w, int h)
     {
-        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-        tex.filterMode = FilterMode.Point;
+        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
         var c1 = new Color(0.16f, 0.16f, 0.16f, 1f);
         var c2 = new Color(0.22f, 0.22f, 0.22f, 1f);
         for (int y = 0; y < h; y++)
@@ -616,15 +402,6 @@ public class MergeStation : MonoBehaviour
                     s.item.ApplyStatModifier(stats);
             }
         }
-    }
-
-    private static Material GetBlitMat()
-    {
-        if (_blitMat != null) return _blitMat;
-        var sh = Shader.Find("Unlit/Texture");
-        _blitMat = new Material(sh) { hideFlags = HideFlags.DontSave };
-        _blitMat.color = Color.white;
-        return _blitMat;
     }
 }
 

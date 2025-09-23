@@ -3,7 +3,23 @@ guid: 715782d5b8de8c64ba4f413ad58bb3dd
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - inventory: {instanceID: 0}
+  - inventoryView: {instanceID: 0}
+  - playerStats: {instanceID: 0}
+  - slot1: {instanceID: 0}
+  - slot2: {instanceID: 0}
+  - slot3: {instanceID: 0}
+  - chanceText: {instanceID: 0}
+  - slot1Icon: {instanceID: 0}
+  - slot2Icon: {instanceID: 0}
+  - outputIcon: {instanceID: 0}
+  - slot1Label: {instanceID: 0}
+  - slot2Label: {instanceID: 0}
+  - outputLabel: {instanceID: 0}
+  - mergeButton: {instanceID: 0}
+  - clearButton: {instanceID: 0}
+  - placeholderIcon: {fileID: 21300000, guid: 464f93e54326bb346a3a228e12e2a064, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

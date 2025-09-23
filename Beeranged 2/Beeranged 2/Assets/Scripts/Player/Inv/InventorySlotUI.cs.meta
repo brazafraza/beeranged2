@@ -3,7 +3,13 @@ guid: 3ebce84bf0b69af41917a9a22ae474aa
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - icon: {instanceID: 0}
+  - countLabel: {instanceID: 0}
+  - background: {instanceID: 0}
+  - fallbackSprite: {fileID: 21300000, guid: 464f93e54326bb346a3a228e12e2a064, type: 3}
+  - canvasGroup: {instanceID: 0}
+  - item: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
