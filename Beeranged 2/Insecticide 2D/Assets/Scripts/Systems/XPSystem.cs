@@ -77,7 +77,7 @@ public class XPSystem : MonoBehaviour
     {
         if (upgradeManager != null)
         {
-            upgradeManager.ShowUpgradeOptions();
+           //upgradeManager.ShowUpgradeOptions();
         }
         else
         {

@@ -6,7 +6,7 @@ using TMPro;
 public class GameClock : MonoBehaviour
 {
     [Header("UI (optional)")]
-    public TextMeshProUGUI timeText;          // assign a UI Text, or leave null
+    public TextMeshProUGUI timeText;     // assign a UI Text, or leave null
     public bool autoStart = true;
 
     public float ElapsedSeconds { get; private set; }
@@ -28,13 +28,17 @@ public class GameClock : MonoBehaviour
     {
         if (!IsRunning) return;
 
-        ElapsedSeconds += Time.unscaledDeltaTime; // keeps time during timescale changes if you want
-        int minute = Mathf.FloorToInt(ElapsedSeconds / 60f);
+        // Use scaled time so clock pauses with timeScale == 0 (game paused)
+        float dt = Time.deltaTime;
+        if (dt <= 0f) return; // paused or no frame progress
 
+        ElapsedSeconds += dt;
+
+        int minute = Mathf.FloorToInt(ElapsedSeconds / 60f);
         if (minute != _lastMinute)
         {
             _lastMinute = minute;
-            if (OnMinuteChanged != null) OnMinuteChanged.Invoke(minute);
+            OnMinuteChanged?.Invoke(minute);
         }
 
         UpdateUI();
@@ -51,6 +55,7 @@ public class GameClock : MonoBehaviour
 
     public void Pause() { IsRunning = false; }
     public void Resume() { IsRunning = true; }
+
     public void ResetClock()
     {
         ElapsedSeconds = 0f;

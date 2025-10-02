@@ -40,10 +40,15 @@ public class GameManager : MonoBehaviour
         {
             if (Input.GetKeyDown(KeyCode.E))
             {
+                FindAnyObjectByType<MergeStation>()?.OnInventoryClosed();
+
                 blockint.SetActive(true);
                 inventoryOpen = false;
                 inventoryRoot.SetActive(false);
                 PauseManager.SetSoftPaused(false);
+
+               
+
             }
         }
 

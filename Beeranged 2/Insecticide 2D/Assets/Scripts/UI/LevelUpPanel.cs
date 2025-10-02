@@ -26,6 +26,10 @@ public class LevelUpPanel : MonoBehaviour
     public TextMeshProUGUI optionName3;
     public TextMeshProUGUI optionDesc3;
 
+    [Header("Behavior")]
+    [Tooltip("If true, panel hides as soon as an option is clicked.")]
+    public bool autoHideOnPick = true;
+
     private ItemSO[] _options;
     private Action<ItemSO> _onChoose;
 
@@ -33,22 +37,21 @@ public class LevelUpPanel : MonoBehaviour
     {
         Hide();
 
-        optionButton1?.onClick.AddListener(() => Choose(0));
-        optionButton2?.onClick.AddListener(() => Choose(1));
-        optionButton3?.onClick.AddListener(() => Choose(2));
+        if (optionButton1) optionButton1.onClick.AddListener(() => Choose(0));
+        if (optionButton2) optionButton2.onClick.AddListener(() => Choose(1));
+        if (optionButton3) optionButton3.onClick.AddListener(() => Choose(2));
     }
 
-    /// <summary>
-    /// Shows the upgrade panel with 1–3 options.
-    /// </summary>
+    public void SetAutoHide(bool value) => autoHideOnPick = value;
+
     public void Show(ItemSO[] options, Action<ItemSO> onChoose)
     {
         _options = options;
         _onChoose = onChoose;
 
-        SetupOption(0, options.Length > 0 ? options[0] : null);
-        SetupOption(1, options.Length > 1 ? options[1] : null);
-        SetupOption(2, options.Length > 2 ? options[2] : null);
+        SetupOption(0, (options != null && options.Length > 0) ? options[0] : null);
+        SetupOption(1, (options != null && options.Length > 1) ? options[1] : null);
+        SetupOption(2, (options != null && options.Length > 2) ? options[2] : null);
 
         if (root) root.SetActive(true);
         else gameObject.SetActive(true);
@@ -60,14 +63,16 @@ public class LevelUpPanel : MonoBehaviour
         else gameObject.SetActive(false);
     }
 
-    private void Choose(int index)
+    private void Choose(int i)
     {
-        if (_options != null && index >= 0 && index < _options.Length)
-        {
-            _onChoose?.Invoke(_options[index]);
-        }
+        ItemSO pick = null;
+        if (_options != null && i >= 0 && i < _options.Length)
+            pick = _options[i];
 
-        Hide();
+        _onChoose?.Invoke(pick);
+
+        if (autoHideOnPick)
+            Hide();
     }
 
     private void SetupOption(int index, ItemSO item)
@@ -81,14 +86,14 @@ public class LevelUpPanel : MonoBehaviour
 
         if (btn)
         {
-            btn.interactable = hasItem;
             btn.gameObject.SetActive(hasItem);
+            btn.interactable = hasItem;
         }
 
         if (icon)
         {
             icon.sprite = hasItem ? item.icon : null;
-            icon.enabled = hasItem;
+            icon.enabled = hasItem && item.icon != null;
         }
 
         if (name) name.text = hasItem ? item.itemName : "--";

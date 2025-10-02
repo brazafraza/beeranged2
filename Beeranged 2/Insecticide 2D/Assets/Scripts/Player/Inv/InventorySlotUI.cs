@@ -3,32 +3,26 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
 
-[DisallowMultipleComponent]
-[RequireComponent(typeof(RectTransform))]
 public class InventorySlotUI : MonoBehaviour,
     IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
-    [Header("UI (auto-wired if left empty)")]
-    public Image icon;                       // child named "Icon"
-    public TextMeshProUGUI countLabel;       // child named "Count"
-    public Image background;                 // raycast target on the slot root
+    [Header("UI")]
+    public Image icon;                  // child named "Icon"
+    public TextMeshProUGUI countLabel;  // child named "Count"
+    public Image background;            // raycast area on the slot root
 
     [Header("Options")]
-    [Tooltip("If true, ensures the slot root has a raycastable Image so empty slots can receive drops.")]
+    [Tooltip("Ensures the slot root has a raycastable Image so empty slots can receive drops.")]
     public bool ensureRaycastBackground = true;
-
-    [Tooltip("Color for the background raycast Image (alpha can be 0).")]
+    [Tooltip("Color for the background image (alpha can be 0).")]
     public Color backgroundColor = new Color(0, 0, 0, 0);
 
-    [Tooltip("Force icon to preserve aspect.")]
-    public bool preserveIconAspect = true;
-
-    [Tooltip("Force icon tint on bind (keeps it visible).")]
-    public Color iconTint = Color.white;
+    [Tooltip("If false, this slot will NOT forward OnDrop to the InventoryView. Useful for special UIs (e.g., MergeStation slots).")]
+    public bool acceptDrops = true;
 
     [HideInInspector] public CanvasGroup canvasGroup;
 
-    // Bound data
+    // bound data
     [HideInInspector] public SlotGroup group;
     [HideInInspector] public int index;
     [HideInInspector] public ItemSO item;
@@ -36,96 +30,58 @@ public class InventorySlotUI : MonoBehaviour,
 
     private InventoryView _view;
 
-    void Reset() { AutoWire(); }
-    void Awake() { AutoWire(); }
-#if UNITY_EDITOR
-    void OnValidate() { if (!Application.isPlaying) AutoWire(); }
-#endif
-
-    private void AutoWire()
+    void Awake()
     {
-        // Ensure CanvasGroup
-        canvasGroup = GetComponent<CanvasGroup>() ?? gameObject.AddComponent<CanvasGroup>();
+        canvasGroup = gameObject.GetComponent<CanvasGroup>() ?? gameObject.AddComponent<CanvasGroup>();
 
-        // Find child "Icon" first, otherwise any Image in children (including inactive)
         if (!icon)
-        {
-            var t = transform.Find("Icon");
-            if (t) icon = t.GetComponent<Image>();
-            if (!icon) icon = GetComponentInChildren<Image>(true);
-        }
-
-        // Find child "Count" first, otherwise any TMP in children
+            icon = transform.Find("Icon") ? transform.Find("Icon").GetComponent<Image>() : null;
         if (!countLabel)
-        {
-            var t = transform.Find("Count");
-            if (t) countLabel = t.GetComponent<TextMeshProUGUI>();
-            if (!countLabel) countLabel = GetComponentInChildren<TextMeshProUGUI>(true);
-        }
+            countLabel = transform.Find("Count") ? transform.Find("Count").GetComponent<TextMeshProUGUI>() : null;
 
-        // Ensure a raycastable background so empty slots still receive drops
         if (ensureRaycastBackground)
         {
             if (!background) background = GetComponent<Image>();
             if (!background) background = gameObject.AddComponent<Image>();
-            background.color = backgroundColor;     // can be fully transparent
-            background.raycastTarget = true;        // important for OnDrop on empty slots
-        }
-
-        if (icon)
-        {
-            icon.preserveAspect = preserveIconAspect;
-            icon.color = iconTint;
+            background.color = backgroundColor;
+            background.raycastTarget = true;
         }
     }
 
-    /// <summary>Bind this slot to a view index / item / count.</summary>
     public void Bind(InventoryView view, SlotGroup g, int idx, ItemSO it, int ct)
     {
         _view = view;
         group = g;
         index = idx;
         item = it;
-        count = Mathf.Max(0, ct);
+        count = ct;
 
-        // ICON
         if (icon)
         {
-            icon.sprite = (item != null) ? item.icon : null;
-            icon.enabled = (icon.sprite != null);
-            icon.color = iconTint;                 // ensure visible (not transparent)
-            icon.preserveAspect = preserveIconAspect;
+            if (it != null)
+            {
+                icon.enabled = true;
+                icon.sprite = it.icon;
+            }
+            else
+            {
+                icon.enabled = false;
+                icon.sprite = null;
+            }
         }
 
-        // COUNT
         if (countLabel)
-            countLabel.text = (item != null && count > 1) ? $"x{count}" : string.Empty;
+            countLabel.text = (ct > 1) ? $"x{ct}" : "";
 
-        // Keep background raycastable even when slot is empty
         if (background)
             background.raycastTarget = true;
     }
 
-    /// <summary>Clear visuals (does not change underlying inventory data).</summary>
-    public void Clear()
-    {
-        item = null;
-        count = 0;
-
-        if (icon)
-        {
-            icon.sprite = null;
-            icon.enabled = false;
-        }
-
-        if (countLabel)
-            countLabel.text = string.Empty;
-    }
-
     // ===== Drag & Drop =====
+
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (_view == null || item == null) return;   // only drag when the slot has an item
+        if (_view == null || item == null) return;
         _view.BeginDrag(this);
     }
 
@@ -143,8 +99,8 @@ public class InventorySlotUI : MonoBehaviour,
 
     public void OnDrop(PointerEventData eventData)
     {
+        if (!acceptDrops) return;              // <-- key change
         if (_view == null) return;
-        // This is called even if the slot is empty, because background is a raycast target
         _view.HandleDropOn(this);
     }
 }

@@ -6,6 +6,21 @@ using TMPro;
 
 public class MergeStation : MonoBehaviour
 {
+    // ======== Class tags for compatibility ========
+    public enum InsectClass { Winged = 1, Predator = 2, Metamorph = 3, Swarm = 4, Dancer = 5 }
+
+    [System.Serializable]
+    public class ItemMeta
+    {
+        public ItemSO item;
+        public InsectClass classTag = InsectClass.Winged;
+        [Range(0, 100)] public float stability = 100f; // per-item intrinsic stability
+    }
+
+    [Header("Metadata Overrides (Base Items)")]
+    [Tooltip("Assign class + stability for each base ItemSO here. Merged items derive their data automatically.")]
+    public List<ItemMeta> itemMeta = new List<ItemMeta>();
+
     [Header("Inventory & View")]
     public InventorySystem inventory;     // auto-found if null
     public InventoryView inventoryView;   // auto-found if null (to RebuildUI after inventory changes)
@@ -17,7 +32,7 @@ public class MergeStation : MonoBehaviour
     public RectTransform slot3;           // output (draggable result)
 
     [Header("UI Text")]
-    public TextMeshProUGUI chanceText;    // placeholder text (success chance later)
+    public TextMeshProUGUI chanceText;    // shows success chance
 
     [Header("Slot Visuals (optional)")]
     public Image slot1Icon;
@@ -35,6 +50,10 @@ public class MergeStation : MonoBehaviour
     [Tooltip("The fallback icon used for every merged item. If null, a simple checker is generated.")]
     public Sprite placeholderIcon;
 
+    [Header("Merge Behavior")]
+    [Tooltip("When a merge fails, ingredients are still consumed.")]
+    public bool consumeOnFail = true;
+
     [Header("Debug")]
     public bool debugLog = false;
 
@@ -51,7 +70,24 @@ public class MergeStation : MonoBehaviour
     private IngredientStack _ingB;
     private ItemSO _lastOutput;
 
+    // Treat all three merge slots as drag sources via InventorySlotUI
+    private InventorySlotUI _slot1AsSlotUI;
+    private InventorySlotUI _slot2AsSlotUI;
     private InventorySlotUI _slot3AsSlotUI;
+
+    // Compatibility matrix (1..5). Diagonals 100.
+    private static readonly float[,] COMP = {
+        {0,    0,    0,    0,    0,    0   },
+        {0,  100f, 85f,  70f,  70f,  85f }, // 1 Winged
+        {0,   85f,100f,  85f,  70f,  70f }, // 2 Predator
+        {0,   70f, 85f, 100f,  85f,  70f }, // 3 Metamorph
+        {0,   70f, 70f,  85f, 100f,  85f }, // 4 Swarm
+        {0,   85f, 70f,  70f,  85f, 100f }  // 5 Dancer
+    };
+
+    // Decay curve by merge depth (index: depth+1)
+    // 1:0% 2:10% 3:20% 4:35% 5:50% 6:75% 7:90% 8:95% 9:99% 10:100%
+    private static readonly int[] DECAY = { 0, 0, 10, 20, 35, 50, 75, 90, 95, 99, 100 };
 
     void Awake()
     {
@@ -61,16 +97,32 @@ public class MergeStation : MonoBehaviour
 
         EnsureSlotDropCatcher(slot1, 0);
         EnsureSlotDropCatcher(slot2, 1);
-        EnsureSlotDropCatcher(slot3, 2); // drop on output acts like setting ingredient B (optional)
+        EnsureSlotDropCatcher(slot3, 2);
 
         if (mergeButton) mergeButton.onClick.AddListener(Merge);
         if (clearButton) clearButton.onClick.AddListener(ClearAll);
 
-        EnsureSlot3ActsLikeInventorySlot();
+        EnsureSlotsActLikeDraggable();
         RefreshUI();
     }
 
-    // ===================== Merge =====================
+    // ======== Public hook: call this when inventory UI closes ========
+    public void OnInventoryClosed()
+    {
+        // Return any staged ingredients back to inventory and clear
+        ReturnIngredientToInventory(ref _ingA);
+        ReturnIngredientToInventory(ref _ingB);
+
+        // (Optional) also clear any result in Slot3:
+        // _lastOutput = null;
+        // if (_slot3AsSlotUI) _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
+
+        RefreshUI();
+        if (inventoryView) inventoryView.RebuildUI();
+        if (playerStats) playerStats.RecalculateStats();
+    }
+
+    // ===================== Merge (chance-gated) =====================
     public void Merge()
     {
         if (_ingA == null || _ingB == null || _ingA.item == null || _ingB.item == null)
@@ -79,10 +131,36 @@ public class MergeStation : MonoBehaviour
             return;
         }
 
-        // Always use the fallback icon for the merged item
+        float chance = ComputeSuccessChance(_ingA.item, _ingB.item);
+        bool success = Random.Range(0f, 100f) <= chance;
+
+        if (!success)
+        {
+            if (consumeOnFail)
+            {
+                _ingA = null;
+                _ingB = null;
+            }
+            else
+            {
+                ReturnIngredientToInventory(ref _ingA);
+                ReturnIngredientToInventory(ref _ingB);
+            }
+
+            _lastOutput = null;
+            if (_slot3AsSlotUI) _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
+
+            if (chanceText) chanceText.text = $"Success: {chance:0.#}% (Failed)";
+            RefreshUI();
+            if (inventoryView) inventoryView.RebuildUI();
+            if (playerStats) playerStats.RecalculateStats();
+            if (debugLog) Debug.Log($"[MergeStation] Merge FAILED at {chance:0.#}%");
+            return;
+        }
+
+        // Success → create merged item (fallback icon)
         Sprite mergedIcon = placeholderIcon ? placeholderIcon : GeneratePlaceholderSprite(64, 64);
 
-        // Create merged runtime item
         var merged = ScriptableObject.CreateInstance<MergedItemSO>();
         merged.hideFlags = HideFlags.DontSave;
 
@@ -91,8 +169,7 @@ public class MergeStation : MonoBehaviour
 
         merged.itemName = $"Merged: {nameA} + {nameB}";
         merged.description = $"Contains combined effects of {nameA} (x{_ingA.count}) and {nameB} (x{_ingB.count}).";
-        merged.icon = mergedIcon;  // <- ALWAYS fallback
-        if (debugLog) Debug.Log($"[MergeStation] Merged icon set: {merged.icon != null}");
+        merged.icon = mergedIcon;
 
         merged.sources = new List<MergedItemSO.SourceStack>
         {
@@ -100,45 +177,99 @@ public class MergeStation : MonoBehaviour
             new MergedItemSO.SourceStack(_ingB.item, _ingB.count)
         };
 
-        // Ingredients are USED UP on merge
         _ingA = null;
         _ingB = null;
 
-        // Show merged in Slot3 (user drags out or presses Clear)
+        // Show result in Slot3
         _lastOutput = merged;
-        BindSlot3AsItem(_lastOutput);
+        BindSlotAsItem(_slot3AsSlotUI, _lastOutput);
 
+        if (chanceText) chanceText.text = $"Success: {chance:0.#}% (Success)";
         RefreshUI();
         if (inventoryView) inventoryView.RebuildUI();
         if (playerStats) playerStats.RecalculateStats();
+        if (debugLog) Debug.Log($"[MergeStation] Merge SUCCESS at {chance:0.#}%");
     }
 
     public void ClearAll()
     {
-        // Return ingredients back to inventory on manual clear (not on merge)
         ReturnIngredientToInventory(ref _ingA);
         ReturnIngredientToInventory(ref _ingB);
 
-        // Clear result (do NOT auto-add)
         _lastOutput = null;
-        if (_slot3AsSlotUI)
-            _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
+        if (_slot3AsSlotUI) _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
 
         RefreshUI();
         if (inventoryView) inventoryView.RebuildUI();
         if (playerStats) playerStats.RecalculateStats();
     }
 
-    // ===================== Drops (consume on placement) =====================
+    // ===================== Drops (consume on placement + support dragging between) =====================
     private void OnDropIntoSlot(int slotIndex, PointerEventData e)
     {
         var dragged = e.pointerDrag ? e.pointerDrag.GetComponentInParent<InventorySlotUI>() : null;
         if (dragged == null || dragged.item == null) return;
 
+        // 1) If dragging the RESULT (slot3) into slot1/slot2 → move result to ingredient and clear slot3
+        bool fromOutput = (dragged == _slot3AsSlotUI);
+        if (fromOutput)
+        {
+            if (_lastOutput == null) return;
+
+            ItemSO resultItem = _lastOutput;
+
+            if (slotIndex == 0)
+            {
+                if (_ingA != null && _ingA.item != null && _ingA.item != resultItem)
+                    ReturnIngredientToInventory(ref _ingA);
+                _ingA = new IngredientStack(resultItem, 1);
+            }
+            else if (slotIndex == 1)
+            {
+                if (_ingB != null && _ingB.item != null && _ingB.item != resultItem)
+                    ReturnIngredientToInventory(ref _ingB);
+                _ingB = new IngredientStack(resultItem, 1);
+            }
+
+            _lastOutput = null;
+            _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
+
+            RefreshUI();
+            if (inventoryView) inventoryView.RebuildUI();
+            if (playerStats) playerStats.RecalculateStats();
+            return;
+        }
+
+        // 2) If dragging FROM an ingredient slot TO the other ingredient slot → move it across
+        bool fromIng1 = (dragged == _slot1AsSlotUI);
+        bool fromIng2 = (dragged == _slot2AsSlotUI);
+        if (fromIng1 || fromIng2)
+        {
+            var origin = fromIng1 ? ref _ingA : ref _ingB;
+            var target = slotIndex == 0 ? ref _ingA : ref _ingB;
+
+            // If dropping on same slot, do nothing
+            if ((fromIng1 && slotIndex == 0) || (fromIng2 && slotIndex == 1))
+                return;
+
+            // If target occupied with different item, return it first
+            if (target != null && target.item != null && target.item != origin.item)
+                ReturnIngredientToInventory(ref target);
+
+            // Move origin → target
+            target = origin;
+            origin = null;
+
+            RefreshUI();
+            if (inventoryView) inventoryView.RebuildUI();
+            if (playerStats) playerStats.RecalculateStats();
+            return;
+        }
+
+        // 3) Dragging from Inventory/Active into ingredient (consume)
         ItemSO item = dragged.item;
         int stackCount = Mathf.Max(1, dragged.count);
 
-        // If dropping onto an occupied slot with a different item, return the old one first
         if (slotIndex == 0 && _ingA != null && _ingA.item != null && _ingA.item != item)
             ReturnIngredientToInventory(ref _ingA);
         if (slotIndex == 1 && _ingB != null && _ingB.item != null && _ingB.item != item)
@@ -147,13 +278,12 @@ public class MergeStation : MonoBehaviour
         // CONSUME from inventory immediately on placement
         ConsumeFromInventory(item, stackCount, dragged.group == SlotGroup.Active);
 
-        // Place/stack into ingredient
         if (slotIndex == 0)
         {
             if (_ingA != null && _ingA.item == item) _ingA.count += stackCount;
             else _ingA = new IngredientStack(item, stackCount);
         }
-        else if (slotIndex == 1 || slotIndex == 2) // allow drop on Slot3 to fill B
+        else if (slotIndex == 1 || slotIndex == 2) // allow drop on Slot3 area to fill B
         {
             if (_ingB != null && _ingB.item == item) _ingB.count += stackCount;
             else _ingB = new IngredientStack(item, stackCount);
@@ -164,8 +294,34 @@ public class MergeStation : MonoBehaviour
         if (playerStats) playerStats.RecalculateStats();
     }
 
+    // When end-dragging from any merge slot, if dropped outside merge panel → return to inventory and clear.
+    private void HandleEndDragFromMergeSlot(InventorySlotUI originSlotUI, System.Func<IngredientStack> getter, System.Action clearAction, PointerEventData e)
+    {
+        var go = e.pointerCurrentRaycast.gameObject;
+        bool droppedOnMerge =
+            (go != null) &&
+            (go.transform.IsChildOf(slot1) || go.transform.IsChildOf(slot2) || go.transform.IsChildOf(slot3) ||
+             go.transform == slot1 || go.transform == slot2 || go.transform == slot3);
+
+        if (!droppedOnMerge)
+        {
+            var stk = getter();
+            if (stk != null && stk.item != null)
+            {
+                for (int i = 0; i < Mathf.Max(1, stk.count); i++)
+                    inventory.AddItem(stk.item);
+            }
+
+            clearAction?.Invoke();
+
+            RefreshUI();
+            if (inventoryView) inventoryView.RebuildUI();
+            if (playerStats) playerStats.RecalculateStats();
+        }
+    }
+
     // Called when dragging from Slot3 ends. If dropped OUTSIDE merge panel, add to inventory and clear.
-    private void HandleSlot3EndDrag(PointerEventData e)
+    private void HandleEndDragFromResult(PointerEventData e)
     {
         if (_lastOutput == null) return;
 
@@ -178,7 +334,7 @@ public class MergeStation : MonoBehaviour
         if (!droppedOnMerge)
         {
             if (inventory != null)
-                inventory.AddItem(_lastOutput); // Inventory UI shows fallback icon
+                inventory.AddItem(_lastOutput);
 
             _lastOutput = null;
             if (_slot3AsSlotUI)
@@ -188,21 +344,19 @@ public class MergeStation : MonoBehaviour
             if (inventoryView) inventoryView.RebuildUI();
             if (playerStats) playerStats.RecalculateStats();
         }
-        // else: dropped back on merge panel – keep showing the result
+        // else: if dropped on merge panel, OnDropIntoSlot handles moving into Slot1/Slot2.
     }
 
-    // ===================== Inventory ops (consume/return) =====================
+    // ===================== Inventory ops =====================
     private void ConsumeFromInventory(ItemSO item, int count, bool cameFromActive)
     {
         if (inventory == null || count <= 0 || item == null) return;
 
         int remaining = count;
 
-        // If dragged from Active, reduce active first
         if (cameFromActive)
             remaining -= RemoveFromList(inventory.activeItems, item, remaining);
 
-        // Always reduce the total inventory
         remaining = count;
         remaining -= RemoveFromList(inventory.allItems, item, remaining);
 
@@ -285,7 +439,7 @@ public class MergeStation : MonoBehaviour
             else slot2Label.text = "—";
         }
 
-        // Output (always show something if there is a result)
+        // Output
         if (outputIcon)
         {
             outputIcon.color = Color.white;
@@ -298,7 +452,21 @@ public class MergeStation : MonoBehaviour
         if (outputLabel)
             outputLabel.text = _lastOutput ? _lastOutput.itemName : "Merged Item";
 
-        if (chanceText) chanceText.text = "Success: 100%"; // placeholder
+        // Chance label
+        if (chanceText)
+        {
+            if (_ingA != null && _ingB != null && _ingA.item != null && _ingB.item != null)
+            {
+                float chance = ComputeSuccessChance(_ingA.item, _ingB.item);
+                chanceText.text = $"Success: {chance:0.#}%";
+            }
+            else chanceText.text = "Success: --";
+        }
+
+        // Re-bind the UI slot wrappers to reflect current contents (so dragging works)
+        BindSlotAsItem(_slot1AsSlotUI, _ingA?.item);
+        BindSlotAsItem(_slot2AsSlotUI, _ingB?.item);
+        BindSlotAsItem(_slot3AsSlotUI, _lastOutput);
 
         if (mergeButton) mergeButton.interactable = (_ingA != null && _ingA.item != null && _ingB != null && _ingB.item != null);
     }
@@ -317,36 +485,165 @@ public class MergeStation : MonoBehaviour
         catcher.Init(this, index);
     }
 
-    // Make Slot3 act like a draggable slot AND notify us when the drag ends to decide whether to add to inventory and clear.
-    private void EnsureSlot3ActsLikeInventorySlot()
+    private void EnsureSlotsActLikeDraggable()
     {
-        if (!slot3) return;
+        // Slot1 as drag source (ingredient A)
+        _slot1AsSlotUI = slot1.GetComponent<InventorySlotUI>();
+        if (!_slot1AsSlotUI) _slot1AsSlotUI = slot1.gameObject.AddComponent<InventorySlotUI>();
+        if (!_slot1AsSlotUI.canvasGroup)
+            _slot1AsSlotUI.canvasGroup = slot1.GetComponent<CanvasGroup>() ?? slot1.gameObject.AddComponent<CanvasGroup>();
+        if (slot1Icon) _slot1AsSlotUI.icon = slot1Icon;
+        _slot1AsSlotUI.acceptDrops = false; // DO NOT let inv UI consume drops here
+        _slot1AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
 
-        var bg = slot3.GetComponent<Image>();
-        if (!bg) bg = slot3.gameObject.AddComponent<Image>();
-        bg.color = new Color(0, 0, 0, 0);
-        bg.raycastTarget = true;
+        // Right-click to return to inventory
+        var click1 = slot1.GetComponent<RightClickReturn>();
+        if (!click1) click1 = slot1.gameObject.AddComponent<RightClickReturn>();
+        click1.onRightClick = () => { ReturnIngredientToInventory(ref _ingA); RefreshUI(); if (inventoryView) inventoryView.RebuildUI(); if (playerStats) playerStats.RecalculateStats(); };
 
+        var endDrag1 = slot1.GetComponent<EndDragTracker>();
+        if (!endDrag1) endDrag1 = slot1.gameObject.AddComponent<EndDragTracker>();
+        endDrag1.init = () => HandleEndDragFromMergeSlot(_slot1AsSlotUI, () => _ingA, () => _ingA = null, endDrag1.lastEvent);
+        endDrag1.ownerSlot = _slot1AsSlotUI;
+
+        // Slot2 as drag source (ingredient B)
+        _slot2AsSlotUI = slot2.GetComponent<InventorySlotUI>();
+        if (!_slot2AsSlotUI) _slot2AsSlotUI = slot2.gameObject.AddComponent<InventorySlotUI>();
+        if (!_slot2AsSlotUI.canvasGroup)
+            _slot2AsSlotUI.canvasGroup = slot2.GetComponent<CanvasGroup>() ?? slot2.gameObject.AddComponent<CanvasGroup>();
+        if (slot2Icon) _slot2AsSlotUI.icon = slot2Icon;
+        _slot2AsSlotUI.acceptDrops = false; // same
+        _slot2AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
+
+        var click2 = slot2.GetComponent<RightClickReturn>();
+        if (!click2) click2 = slot2.gameObject.AddComponent<RightClickReturn>();
+        click2.onRightClick = () => { ReturnIngredientToInventory(ref _ingB); RefreshUI(); if (inventoryView) inventoryView.RebuildUI(); if (playerStats) playerStats.RecalculateStats(); };
+
+        var endDrag2 = slot2.GetComponent<EndDragTracker>();
+        if (!endDrag2) endDrag2 = slot2.gameObject.AddComponent<EndDragTracker>();
+        endDrag2.init = () => HandleEndDragFromMergeSlot(_slot2AsSlotUI, () => _ingB, () => _ingB = null, endDrag2.lastEvent);
+        endDrag2.ownerSlot = _slot2AsSlotUI;
+
+        // Slot3 as drag source (result)
         _slot3AsSlotUI = slot3.GetComponent<InventorySlotUI>();
         if (!_slot3AsSlotUI) _slot3AsSlotUI = slot3.gameObject.AddComponent<InventorySlotUI>();
-
-        if (outputIcon) _slot3AsSlotUI.icon = outputIcon;
         if (!_slot3AsSlotUI.canvasGroup)
             _slot3AsSlotUI.canvasGroup = slot3.GetComponent<CanvasGroup>() ?? slot3.gameObject.AddComponent<CanvasGroup>();
-
-        // Bind empty initially
+        if (outputIcon) _slot3AsSlotUI.icon = outputIcon;
+        _slot3AsSlotUI.acceptDrops = false; // result slot also shouldn't eat drops
         _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, null, 0);
 
-        // End-drag tracker: when user drops outside merge panel, add to inventory + clear
-        var endDragTracker = slot3.GetComponent<Slot3EndDragTracker>();
-        if (!endDragTracker) endDragTracker = slot3.gameObject.AddComponent<Slot3EndDragTracker>();
-        endDragTracker.owner = this;
+        var endDrag3 = slot3.GetComponent<Slot3EndDragTracker>();
+        if (!endDrag3) endDrag3 = slot3.gameObject.AddComponent<Slot3EndDragTracker>();
+        endDrag3.owner = this;
     }
 
-    private void BindSlot3AsItem(ItemSO item)
+    private void BindSlotAsItem(InventorySlotUI slotUI, ItemSO item)
     {
-        if (!_slot3AsSlotUI || !inventoryView) return;
-        _slot3AsSlotUI.Bind(inventoryView, SlotGroup.Inactive, -1, item, 1);
+        if (!slotUI || !inventoryView) return;
+        // Count shows as 1 here (visual only)
+        slotUI.Bind(inventoryView, SlotGroup.Inactive, -1, item, item ? 1 : 0);
+    }
+
+    // ===================== Chance math =====================
+    private float ComputeSuccessChance(ItemSO a, ItemSO b)
+    {
+        float stabA = GetStability(a);
+        float stabB = GetStability(b);
+
+        float comp = ComputeCompatibilityPercent(a, b);
+        float decay = 0.5f * (GetDecayPercentForDepth(GetMergeDepth(a)) + GetDecayPercentForDepth(GetMergeDepth(b)));
+
+        float result = ((stabA + stabB) * 0.5f) - decay - (100f - comp);
+        result = Mathf.Clamp(result, 0f, 100f);
+
+        if (debugLog)
+            Debug.Log($"[MergeStation] Chance calc: stabA={stabA}, stabB={stabB}, comp={comp}, decay={decay} => {result}%");
+        return result;
+    }
+
+    private float GetStability(ItemSO item)
+    {
+        if (item is MergedItemSO m && m.sources != null && m.sources.Count > 0)
+        {
+            float total = 0f; int totalCount = 0;
+            foreach (var s in m.sources)
+            {
+                if (s?.item == null || s.count <= 0) continue;
+                float stab = GetStability(s.item);
+                total += stab * s.count;
+                totalCount += s.count;
+            }
+            return (totalCount > 0) ? total / totalCount : 100f;
+        }
+
+        var meta = FindMeta(item);
+        return meta != null ? Mathf.Clamp(meta.stability, 0f, 100f) : 100f;
+    }
+
+    private int GetMergeDepth(ItemSO item)
+    {
+        if (item is MergedItemSO m && m.sources != null && m.sources.Count > 0)
+        {
+            int best = 0;
+            foreach (var s in m.sources)
+            {
+                if (s?.item == null) continue;
+                int d = GetMergeDepth(s.item);
+                if (d > best) best = d;
+            }
+            return best + 1;
+        }
+        return 0;
+    }
+
+    private float GetDecayPercentForDepth(int depth)
+    {
+        int idx = Mathf.Clamp(depth + 1, 0, DECAY.Length - 1);
+        return DECAY[idx];
+    }
+
+    private float ComputeCompatibilityPercent(ItemSO a, ItemSO b)
+    {
+        var setA = GetClassSet(a);
+        var setB = GetClassSet(b);
+
+        if (setA.Count == 0 || setB.Count == 0) return 100f;
+
+        float sum = 0f; int n = 0;
+        foreach (var ca in setA)
+            foreach (var cb in setB)
+            {
+                sum += COMP[(int)ca, (int)cb];
+                n++;
+            }
+        return (n > 0) ? (sum / n) : 100f;
+    }
+
+    private HashSet<InsectClass> GetClassSet(ItemSO item)
+    {
+        var result = new HashSet<InsectClass>();
+        if (item is MergedItemSO m && m.sources != null && m.sources.Count > 0)
+        {
+            foreach (var s in m.sources)
+            {
+                if (s?.item == null) continue;
+                foreach (var c in GetClassSet(s.item)) result.Add(c);
+            }
+        }
+        else
+        {
+            var meta = FindMeta(item);
+            result.Add(meta != null ? meta.classTag : InsectClass.Dancer);
+        }
+        return result;
+    }
+
+    private ItemMeta FindMeta(ItemSO item)
+    {
+        for (int i = 0; i < itemMeta.Count; i++)
+            if (itemMeta[i].item == item) return itemMeta[i];
+        return null;
     }
 
     // ===================== Icon helper =====================
@@ -373,10 +670,30 @@ public class MergeStation : MonoBehaviour
         public void OnDrop(PointerEventData eventData) { _station?.OnDropIntoSlot(_index, eventData); }
     }
 
+    // Right-click utility to send ingredient back to inventory
+    private class RightClickReturn : MonoBehaviour, IPointerClickHandler
+    {
+        public System.Action onRightClick;
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Right)
+                onRightClick?.Invoke();
+        }
+    }
+
+    // For Slot1/Slot2 end-drag handling (return to inventory if dropped outside)
+    private class EndDragTracker : MonoBehaviour, IEndDragHandler
+    {
+        public InventorySlotUI ownerSlot;
+        public PointerEventData lastEvent;
+        public System.Action init; // set by MergeStation to call with latest event
+        public void OnEndDrag(PointerEventData eventData) { lastEvent = eventData; init?.Invoke(); }
+    }
+
     private class Slot3EndDragTracker : MonoBehaviour, IEndDragHandler
     {
         public MergeStation owner;
-        public void OnEndDrag(PointerEventData eventData) => owner?.HandleSlot3EndDrag(eventData);
+        public void OnEndDrag(PointerEventData eventData) => owner?.HandleEndDragFromResult(eventData);
     }
 
     [CreateAssetMenu(fileName = "MergedItem", menuName = "Inventory/Merged Item (Runtime Only)")]
@@ -402,16 +719,5 @@ public class MergeStation : MonoBehaviour
                     s.item.ApplyStatModifier(stats);
             }
         }
-    }
-}
-
-// -------- Small extension --------
-static class _MergeMathExt
-{
-    public static float Clamp01(this float x)
-    {
-        if (x < 0f) return 0f;
-        if (x > 1f) return 1f;
-        return x;
     }
 }
