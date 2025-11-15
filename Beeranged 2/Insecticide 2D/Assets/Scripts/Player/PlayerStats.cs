@@ -100,12 +100,17 @@ public class PlayerStats : MonoBehaviour
         {
             foreach (var stack in inventory.activeItems)
             {
-                for (int i = 0; i < stack.count; i++)
-                {
-                    stack.item.ApplyStatModifier(this);
-                }
+                if (stack == null || stack.item == null || stack.count <= 0)
+                    continue;
+
+                // Diminishing-returns multiplier based on this stack’s count
+                float mult = stack.item.GetStackMultiplier(stack.count);
+
+                // Apply the item’s effect once, scaled by the multiplier
+                stack.item.ApplyStatModifier(this, mult);
             }
         }
+
 
         // Clamp HP
         CurrentHP = Mathf.Clamp(CurrentHP, 0, maxHP);

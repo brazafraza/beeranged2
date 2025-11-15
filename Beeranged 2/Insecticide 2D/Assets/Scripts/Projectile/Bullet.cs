@@ -20,6 +20,7 @@ public class Bullet : MonoBehaviour
     public int pierce = 0;
 
     private int _damage;
+    public int damage;
     private float _t;
 
     public void Launch(

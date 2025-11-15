@@ -10,12 +10,25 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: df7d86f35cd9693459c6625c38b5809f, type: 3}
-  m_Name: Test
+  m_Name: Base
   m_EditorClassIdentifier: 
   itemName: Test
-  description: Test
+  description: Base Item (Test)
   icon: {fileID: 21300000, guid: f95c29ab0ce76c045a33712a121f8cff, type: 3}
+  itemClass: 0
+  rarity: 0
   modifiesStats: 1
   statType: 0
   modifierAmount: 0.5
   abilityPrefab: {fileID: 0}
+  primaryAbility: {fileID: 11400000, guid: 9601614d185178e4c89664608f9deaa9, type: 2}
+  secondaryAbility: {fileID: 11400000, guid: 031f01f9a05f7c249b648c20fae177a2, type: 2}
+  movementAbility: {fileID: 11400000, guid: 732f500f5180a654ca2a135ffb50edf2, type: 2}
+  movementAbilityType: 0
+  overridesMovementStats: 0
+  movementDashSpeed: 16
+  movementDashDuration: 0.15
+  movementDashCooldown: 0.75
+  stability: 1
+  maxStackBonus: 0.2
+  stackFalloff: 0.7

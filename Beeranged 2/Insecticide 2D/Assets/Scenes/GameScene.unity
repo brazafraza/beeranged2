@@ -4602,7 +4602,7 @@ Transform:
   m_GameObject: {fileID: 817002765}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: -0.64, z: 0}
   m_LocalScale: {x: 0.33986497, y: 0.33986497, z: 0.33986497}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -9210,11 +9210,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1502178454}
+  - component: {fileID: 1502178462}
   - component: {fileID: 1502178460}
   - component: {fileID: 1502178457}
   - component: {fileID: 1502178455}
   - component: {fileID: 1502178461}
-  - component: {fileID: 1502178462}
   - component: {fileID: 1502178463}
   m_Layer: 0
   m_Name: Player
@@ -9308,6 +9308,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0b55c3229b3cb6446b6bc5b918f13029, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  inventory: {fileID: 0}
+  autoBindInventory: 1
+  activeMovementAbility: {fileID: 0}
   moveSpeed: 6
   jumpForce: 4.75
   rb: {fileID: 1502178455}
@@ -9338,8 +9341,21 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 5146ef73240664045bd5e97588da08e9, type: 3}
   - {fileID: 21300000, guid: 5f7ebb2ebd54a3a48a09837438a3c9ed, type: 3}
   jumpAnimFPS: 12
+  movementAbilityKey: 304
+  dashSpeed: 16
+  dashDuration: 0.15
+  dashCooldown: 0.75
+  dashOverrideVerticalVelocity: 1
+  currentMovementAbility: 1
+  defaultDashSpeed: 0
+  defaultDashDuration: 0
+  defaultDashCooldown: 0
   freezePhysicsOnPause: 1
   keepMomentumAfterPause: 0
+  blinkDistance: 4
+  blinkUpDistance: 3
+  isHovering: 0
+  hoverGravityScale: 0.2
 --- !u!61 &1502178461
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -9397,6 +9413,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 441ed88bb6afada4f828ada0cc272508, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  gameplayMode: 1
   allItems: []
   activeItems: []
 --- !u!114 &1502178463
@@ -9411,6 +9428,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff44f30fd362f0043ae33ae3fdbf50fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  inventory: {fileID: 0}
+  autoBindInventory: 1
+  activePrimaryAbility: {fileID: 0}
+  activeSecondaryAbility: {fileID: 0}
   projectilePrefab: {fileID: 8375545027065108801, guid: f349d4988959c854bb26217af58c2d88, type: 3}
   muzzle: {fileID: 478987591}
   spawnOffset: {x: 0, y: 0}
@@ -9422,6 +9443,14 @@ MonoBehaviour:
   mouseButton: 0
   holdToFire: 0
   fireCooldown: 0.25
+  secondaryProjectilePrefab: {fileID: 8375545027065108801, guid: 0e608cb7043bc704ba4dfe865729b0b5, type: 3}
+  secondaryProjectileSpeed: 12
+  secondaryProjectileDamage: 10
+  secondaryCooldown: 1
+  secondaryMouseButton: 1
+  secondaryRotationOffsetDeg: -90
+  defaultPrimaryProjectile: {fileID: 0}
+  defaultSecondaryProjectile: {fileID: 0}
 --- !u!1 &1503889950
 GameObject:
   m_ObjectHideFlags: 0
@@ -9859,7 +9888,6 @@ GameObject:
   - component: {fileID: 1542357087}
   - component: {fileID: 1542357086}
   - component: {fileID: 1542357088}
-  - component: {fileID: 1542357089}
   - component: {fileID: 1542357090}
   - component: {fileID: 1542357092}
   - component: {fileID: 1542357091}
@@ -9931,25 +9959,6 @@ MonoBehaviour:
   priceGene: 150
   priceStrand: 350
   preventDuplicatesPerRoll: 1
---- !u!114 &1542357089
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1542357085}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d77533219a8db704497732a1335140cc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentLevel: 1
-  currentXP: 0
-  xpToNextLevel: 100
-  xpGrowthRate: 1.25
-  devAmnt: 50
-  xpSlider: {fileID: 665585506}
-  upgradeManager: {fileID: 1542357088}
 --- !u!114 &1542357090
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -51,10 +51,23 @@ public class InventoryView : MonoBehaviour
 
     void Awake()
     {
-        if (clampActiveToInventoryMax)
-            activeSlotsCount = Mathf.Min(activeSlotsCount, InventorySystem.MAX_ACTIVE_ITEMS);
-
+        // First, find references (including InventorySystem)
         AutoFindRefs();
+
+        if (clampActiveToInventoryMax)
+        {
+            if (inventory != null)
+            {
+                // Use the gameplay mode’s max (5 or 3)
+                activeSlotsCount = inventory.CurrentMaxActiveSlots;
+            }
+            else
+            {
+                // Fallback if inventory not found yet
+                activeSlotsCount = Mathf.Min(activeSlotsCount, InventorySystem.MAX_ACTIVE_ITEMS);
+            }
+        }
+
         EnsureInventoryPanelDropTarget(); // drop anywhere onto the inventory panel
         BuildDragGhost();
     }

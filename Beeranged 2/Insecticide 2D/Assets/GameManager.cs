@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    
+
     public static GameManager Instance;
 
     public Transform tpDest;
@@ -9,6 +11,9 @@ public class GameManager : MonoBehaviour
     public GameObject inventoryRoot;
     public bool inventoryOpen = false;
     public GameObject blockint;
+
+
+
 
     void Awake()
     {

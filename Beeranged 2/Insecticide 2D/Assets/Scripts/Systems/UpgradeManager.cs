@@ -107,7 +107,9 @@ public class UpgradeManager : MonoBehaviour
         {
             if (inventory.AddItem(chosenItem))
             {
-                Debug.Log($"Purchased: {chosenItem.itemName} for ${price}");
+                // this is debug line HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+
+              //  Debug.Log($"Purchased: {chosenItem.itemName} for ${price}");
                 CloseShop(); // success closes
             }
             else

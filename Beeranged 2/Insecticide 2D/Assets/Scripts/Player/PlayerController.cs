@@ -1,8 +1,16 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static ItemSO;
 
 public class PlayerController : MonoBehaviour
 {
+    [Header("Inventory Binding (Movement Slot)")]
+    public InventorySystem inventory;
+    public bool autoBindInventory = true;
+
+    [Header("Movement Ability (runtime)")]
+    public MovementAbilitySO activeMovementAbility;
+
     [Header("Movement")]
     public float moveSpeed = 8f;
     public float jumpForce = 12f;
@@ -55,6 +63,29 @@ public class PlayerController : MonoBehaviour
     private SpriteRenderer sr;
     private GameManager gm;
 
+    [Header("Movement Ability (Dash)")]
+    public KeyCode movementAbilityKey = KeyCode.LeftShift;
+    public float dashSpeed = 16f;
+    public float dashDuration = 0.15f;
+    public float dashCooldown = 0.75f;
+    public bool dashOverrideVerticalVelocity = true;
+
+    [Header("Movement Ability Type")]
+    [Tooltip("What movement ability is currently active (driven by slot 2 item in 3-item mode).")]
+    public MovementAbilityType currentMovementAbility = MovementAbilityType.Dash;
+
+
+    private bool isDashing;
+    private float dashTimer;
+    private float dashCooldownTimer;
+    private int dashDirection; // -1 left, +1 right
+
+    [Header("Dash Defaults (for reset)")]
+    public float defaultDashSpeed;
+    public float defaultDashDuration;
+    public float defaultDashCooldown;
+
+
     [Header("Pause")]
     public bool freezePhysicsOnPause = true;   // freeze body on any pause
     public bool keepMomentumAfterPause = false; // restore velocity on resume?
@@ -65,7 +96,7 @@ public class PlayerController : MonoBehaviour
 
     void Awake()
     {
-        stats = GetComponent<PlayerStats>(); // NEW
+        stats = GetComponent<PlayerStats>();
 
         if (stats != null)
         {
@@ -95,18 +126,59 @@ public class PlayerController : MonoBehaviour
                 ? fallbackPoint.position
                 : transform.position;
         }
+
+        // Capture dash defaults if not set
+        if (defaultDashSpeed <= 0f) defaultDashSpeed = dashSpeed;
+        if (defaultDashDuration <= 0f) defaultDashDuration = dashDuration;
+        if (defaultDashCooldown <= 0f) defaultDashCooldown = dashCooldown;
+
+        if (autoBindInventory && !inventory)
+            inventory = FindAnyObjectByType<InventorySystem>();
     }
+
+    void OnEnable()
+    {
+        PauseManager.OnPaused += ApplyPauseFreeze;
+        PauseManager.OnResumed += RemovePauseFreeze;
+
+        if (inventory == null && autoBindInventory)
+            inventory = FindAnyObjectByType<InventorySystem>();
+
+        if (inventory != null)
+            inventory.OnChanged += RefreshMovementFromInventory;
+
+        RefreshMovementFromInventory();
+    }
+
+    void OnDisable()
+    {
+        PauseManager.OnPaused -= ApplyPauseFreeze;
+        PauseManager.OnResumed -= RemovePauseFreeze;
+
+        if (inventory != null)
+            inventory.OnChanged -= RefreshMovementFromInventory;
+    }
+
 
     void Update()
     {
         if (PauseManager.IsPaused)
         {
-     
             return;
         }
-            
 
         moveInput = Input.GetAxisRaw("Horizontal");
+
+        // Update dash timers
+        if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
+        if (isDashing)
+        {
+            dashTimer -= Time.deltaTime;
+            if (dashTimer <= 0f)
+            {
+                isDashing = false;
+            }
+        }
 
         // Wall-stick fix
         if ((IsTouchingWall(Vector2.left) && moveInput < 0) || (IsTouchingWall(Vector2.right) && moveInput > 0))
@@ -125,13 +197,12 @@ public class PlayerController : MonoBehaviour
 
             // Set facing direction at the time of jump
             if (moveInput != 0)
-                _facingDirection = moveInput > 0 ? -1 : 1;
+                _facingDirection = moveInput > 0 ? 1 : -1;
 
             if (lastJumpPoint != null)
             {
                 Vector2 offset = new Vector2(jumpOffsetX * _facingDirection, 0f);
                 lastJumpPoint.position = (Vector2)transform.position + offset;
-                //Debug.Log("Set LastJumpPoint with offset: " + lastJumpPoint.position);
             }
         }
 
@@ -140,10 +211,21 @@ public class PlayerController : MonoBehaviour
             StopJumpAnimation();
         }
 
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        if (Input.GetButtonDown("Jump") && isGrounded && !isDashing)
         {
             rb.velocity = new Vector2(rb.velocity.x, jumpForce);
         }
+
+        // ---------- MOVEMENT ABILITY (generic) ----------
+        if (Input.GetKeyDown(movementAbilityKey))
+        {
+            if (activeMovementAbility != null)
+                activeMovementAbility.UseMovement(this);
+           // else
+                 // Optional default dash, or do nothing
+        }
+
+
 
         HandleVisualFlip();
         HandleSpriteChange();
@@ -153,18 +235,140 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (isDashing)
+        {
+            float vx = dashDirection * dashSpeed;
+            float vy = dashOverrideVerticalVelocity ? 0f : rb.velocity.y;
+            rb.velocity = new Vector2(vx, vy);
+            return;
+        }
+
         rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
     }
-    void OnEnable()
+
+    // ===== Inventory binding for movement ability (slot 2) =====
+    void RefreshMovementFromInventory()
     {
-        PauseManager.OnPaused += ApplyPauseFreeze;
-        PauseManager.OnResumed += RemovePauseFreeze;
+        if (inventory == null || inventory.gameplayMode != GameplayMode.ThreeAbilitySystem)
+        {
+            activeMovementAbility = null;
+            return;
+        }
+
+        ItemSO movementItem = inventory.GetActiveItemAt(2); // MOVEMENT slot
+        activeMovementAbility = movementItem ? movementItem.movementAbility : null;
     }
 
-    void OnDisable()
+
+    // ===== MOVEMENT ABILITY DISPATCH =====
+    void UseMovementAbility()
     {
-        PauseManager.OnPaused -= ApplyPauseFreeze;
-        PauseManager.OnResumed -= RemovePauseFreeze;
+        switch (currentMovementAbility)
+        {
+            case MovementAbilityType.Dash:
+                TryStartDash();
+                break;
+
+            case MovementAbilityType.BlinkForward:
+                DoBlinkForward();
+                break;
+
+            case MovementAbilityType.BlinkUp:
+                DoBlinkUp();
+                break;
+
+            case MovementAbilityType.Hover:
+                ToggleHover();
+                break;
+
+            case MovementAbilityType.None:
+            default:
+                // // Fallback to default movement abil / class - should i make this a seperate item?
+                break;
+        }
+    }
+
+    // --- Dash (existing behaviour, just refactored) ---
+    public void StartDash(float speed, float duration, float cooldown)
+    {
+        dashSpeed = speed;
+        dashDuration = duration;
+        dashCooldown = cooldown;
+
+        if (dashCooldownTimer > 0f && dashCooldownTimer > dashCooldown)
+            dashCooldownTimer = dashCooldown;
+
+        TryStartDash();
+    }
+
+    public void StartDash(float speed, float duration)
+    {
+        StartDash(speed, duration, dashCooldown);
+    }
+
+
+    void TryStartDash()
+    {
+        if (isDashing) return;
+        if (dashCooldownTimer > 0f) return;
+
+        // Decide dash direction: prefer movement input, otherwise facing
+        int dir = 0;
+        if (Mathf.Abs(moveInput) > 0.01f)
+            dir = moveInput > 0 ? 1 : -1;
+        else
+            dir = (_facingDirection != 0) ? (int)Mathf.Sign(_facingDirection) : 1;
+
+        dashDirection = dir;
+        isDashing = true;
+        dashTimer = dashDuration;
+        dashCooldownTimer = dashCooldown;
+    }
+
+    // --- Blink forward: instant teleport in facing direction ---
+    [Header("Blink Settings")]
+    public float blinkDistance = 4f;
+
+    void DoBlinkForward()
+    {
+        // Basic version: move the player by blinkDistance in facing direction.
+        int dir = (_facingDirection != 0) ? (int)Mathf.Sign(_facingDirection) : 1;
+        Vector2 offset = new Vector2(blinkDistance * dir, 0f);
+        transform.position = (Vector2)transform.position + offset;
+
+        // You can later add raycasts here to prevent blinking inside walls.
+    }
+
+    // --- Blink up: instant vertical teleport ---
+    public float blinkUpDistance = 3f;
+
+    void DoBlinkUp()
+    {
+        Vector2 offset = new Vector2(0f, blinkUpDistance);
+        transform.position = (Vector2)transform.position + offset;
+    }
+
+    // --- Hover: toggle a slow-fall mode ---
+    [Header("Hover Settings")]
+    public bool isHovering = false;
+    public float hoverGravityScale = 0.2f;
+    private float _normalGravityScale;
+
+
+    // ADD ANY NEW ABILITIES HERE
+    void ToggleHover()
+    {
+        if (!isHovering)
+        {
+            _normalGravityScale = rb.gravityScale;
+            rb.gravityScale = hoverGravityScale;
+            isHovering = true;
+        }
+        else
+        {
+            rb.gravityScale = _normalGravityScale;
+            isHovering = false;
+        }
     }
 
     void ApplyPauseFreeze()
@@ -244,7 +448,6 @@ public class PlayerController : MonoBehaviour
 
     void HandleSpriteChange()
     {
-     
         if (isAttacking && attackSprite != null)
         {
             sr.sprite = attackSprite;

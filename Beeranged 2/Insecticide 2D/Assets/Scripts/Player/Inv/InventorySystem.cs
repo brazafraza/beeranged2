@@ -3,20 +3,55 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
+
 public class StackedItem
 {
     public ItemSO item;
     public int count = 1;
 }
 
+// Gameplay mode for active slots
+public enum GameplayMode
+{
+    FiveItemSystem,      // old: up to 5 stacked items
+    ThreeAbilitySystem   // new: 3 ability slots (Primary / Secondary / Movement)
+}
+
 public class InventorySystem : MonoBehaviour
 {
     public const int MAX_ACTIVE_ITEMS = 5;
+ 
 
-    [Header("All Items (With Stack Counts)")]
+
+
+    [Header("Gameplay Mode")]
+    public GameplayMode gameplayMode = GameplayMode.FiveItemSystem;
+
+    /// <summary>
+    /// How many active slots should be used based on the selected gameplay mode.
+    /// FiveItemSystem: 5 slots
+    /// ThreeAbilitySystem: 3 slots (use as Primary / Secondary / Movement).
+    /// </summary>
+    public int CurrentMaxActiveSlots
+    {
+        get
+        {
+            switch (gameplayMode)
+            {
+                case GameplayMode.ThreeAbilitySystem:
+                    return 3;
+
+                case GameplayMode.FiveItemSystem:
+                default:
+                    return MAX_ACTIVE_ITEMS; // 5
+            }
+        }
+    }
+
+    [Header("All Items")]
     public List<StackedItem> allItems = new List<StackedItem>();
 
-    [Header("Active Items (Max 5 Unique Types)")]
+    [Header("Active Items")]
     public List<StackedItem> activeItems = new List<StackedItem>();
 
     public event Action OnChanged;
@@ -38,38 +73,94 @@ public class InventorySystem : MonoBehaviour
     {
         if (item == null) return false;
 
-        // All items (stack)
-        var all = allItems.Find(x => x.item == item);
-        if (all != null) all.count++;
-        else allItems.Add(new StackedItem { item = item, count = 1 });
+        // Every pickup is its own entry (no stacking)
+        allItems.Add(new StackedItem { item = item, count = 1 });
 
-        // If already active, increment active stack too
-        var act = activeItems.Find(x => x.item == item);
-        if (act != null)
-        {
-            act.count++;
-            ps?.RecalculateStats();
-            RaiseChanged();
-            return true;
-        }
-
-        // Otherwise, if there’s room, auto-activate first time
+        // Auto-activate if there is room in active bar
         if (activeItems.Count < MAX_ACTIVE_ITEMS)
         {
             activeItems.Add(new StackedItem { item = item, count = 1 });
-            if (item.abilityPrefab) Instantiate(item.abilityPrefab, transform);
+
+            if (item.abilityPrefab)
+                Instantiate(item.abilityPrefab, transform);
+
             ps?.RecalculateStats();
             RaiseChanged();
             return true;
         }
 
-        // No room to auto-activate; remains inactive only
+        // No room to auto-activate; item is just inactive in inventory
         ps?.RecalculateStats();
         RaiseChanged();
         return true;
     }
 
-    // --- Helpers for UI ---
+
+    // --- Helpers for UI & abilities ---
+    public bool MoveOneActiveToInactive(int fromIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= activeItems.Count) return false;
+        var src = activeItems[fromIndex];
+        if (src == null || src.item == null || src.count <= 0) return false;
+
+        // Just decrement active; 'allItems' already holds total count.
+        src.count -= 1;
+        if (src.count <= 0)
+        {
+            activeItems[fromIndex] = new StackedItem { item = null, count = 0 };
+        }
+
+        ps?.RecalculateStats();
+        OnChanged?.Invoke();
+        return true;
+    }
+
+    public bool MoveOneActiveToSlot(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= activeItems.Count) return false;
+        if (toIndex < 0) return false;
+
+        var src = activeItems[fromIndex];
+        if (src == null || src.item == null || src.count <= 0) return false;
+
+        // Ensure list is large enough to hold dest index
+        while (activeItems.Count <= toIndex)
+        {
+            activeItems.Add(new StackedItem { item = null, count = 0 });
+        }
+
+        var dst = activeItems[toIndex];
+
+        // If dest slot empty: create new stack of 1
+        if (dst == null || dst.item == null || dst.count <= 0)
+        {
+            activeItems[toIndex] = new StackedItem { item = src.item, count = 1 };
+        }
+        else if (dst.item == src.item)
+        {
+            // Same item type: increment dest stack
+            dst.count += 1;
+        }
+        else
+        {
+            // Different item already there: you can decide to fail or swap.
+            // For "drag 1 copy here", I'd usually FAIL and let UI prevent this scenario.
+            return false;
+        }
+
+        // Decrement source
+        src.count -= 1;
+        if (src.count <= 0)
+        {
+            // Clear source slot
+            activeItems[fromIndex] = new StackedItem { item = null, count = 0 };
+        }
+
+        // Recalc stats & notify UI
+        ps?.RecalculateStats();
+        OnChanged?.Invoke();
+        return true;
+    }
 
     public void SwapActive(int a, int b)
     {
@@ -95,10 +186,12 @@ public class InventorySystem : MonoBehaviour
     {
         if (item == null) return false;
 
+        // Do we actually have at least one inactive copy of this item?
         int remainder = GetInactiveCount(item);
         if (remainder <= 0) return false;
 
-        int makeActive = Mathf.Clamp(desiredCount, 1, remainder);
+        // In the non-stacking system, we always activate exactly ONE copy
+        int makeActive = 1;
 
         if (index >= 0 && index < activeItems.Count)
         {
@@ -111,17 +204,17 @@ public class InventorySystem : MonoBehaviour
             activeItems.Add(new StackedItem { item = item, count = makeActive });
         }
 
-        MergeDuplicateActives(item);
+        // No more merging duplicates – duplicates should stay as separate entries
+        // MergeDuplicateActives(item);  // <- remove or comment this out
 
         if (item.abilityPrefab && !HasAbilityInstance(item))
-        {
             Instantiate(item.abilityPrefab, transform);
-        }
 
         ps?.RecalculateStats();
         RaiseChanged();
         return true;
     }
+
 
     void MergeDuplicateActives(ItemSO item)
     {
@@ -148,6 +241,7 @@ public class InventorySystem : MonoBehaviour
 
     bool HasAbilityInstance(ItemSO item)
     {
+        // (You can implement tracking here if you want to avoid multiple instances.)
         return false;
     }
 
@@ -168,5 +262,14 @@ public class InventorySystem : MonoBehaviour
     public int GetInactiveCount(ItemSO item)
     {
         return Mathf.Max(0, GetAllCount(item) - GetActiveCount(item));
+    }
+
+    /// <summary>
+    /// Returns the ItemSO currently in the given active slot index, or null if empty/out of range.
+    /// </summary>
+    public ItemSO GetActiveItemAt(int index)
+    {
+        if (index < 0 || index >= activeItems.Count) return null;
+        return activeItems[index]?.item;
     }
 }
