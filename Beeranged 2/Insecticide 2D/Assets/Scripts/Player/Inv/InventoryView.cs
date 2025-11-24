@@ -216,11 +216,20 @@ public class InventoryView : MonoBehaviour
     {
         var dict = new Dictionary<ItemSO, int>();
 
+        // 1) Count all copies you own (from allItems)
         foreach (var s in inventory.allItems)
-            dict[s.item] = (dict.TryGetValue(s.item, out var c) ? c : 0) + s.count;
+        {
+            if (s.item == null) continue;
+            int current = 0;
+            dict.TryGetValue(s.item, out current);
+            dict[s.item] = current + s.count;    // count is usually 1 now, but this is safe
+        }
 
+        // 2) Subtract any copies that are currently active
         foreach (var s in inventory.activeItems)
         {
+            if (s == null || s.item == null) continue;
+
             if (dict.TryGetValue(s.item, out var c))
             {
                 c -= s.count;
@@ -229,10 +238,24 @@ public class InventoryView : MonoBehaviour
             }
         }
 
+        // 3) Build a *non-stacked* view: one entry per inactive copy, count always = 1
         _inactiveView.Clear();
         foreach (var kv in dict)
-            _inactiveView.Add(new StackedItem { item = kv.Key, count = kv.Value });
+        {
+            var item = kv.Key;
+            int inactiveCount = kv.Value;
+
+            for (int i = 0; i < inactiveCount; i++)
+            {
+                _inactiveView.Add(new StackedItem
+                {
+                    item = item,
+                    count = 1   // <<< always 1, so no stacking in UI
+                });
+            }
+        }
     }
+
 
     // --- Inventory grid (RECREATE: destroy and rebuild exactly to match inactive items) ---
     void BuildInventoryGridRecreate()

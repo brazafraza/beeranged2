@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 [System.Serializable]
 
@@ -58,6 +59,10 @@ public class InventorySystem : MonoBehaviour
 
     private PlayerStats ps;
 
+    [Header("Ability UI")]
+    public Image primaryAbilityIcon;
+    public Image secondaryAbilityIcon;
+    public Image movementAbilityIcon;
     void Awake()
     {
         ps = GetComponent<PlayerStats>();
@@ -65,6 +70,7 @@ public class InventorySystem : MonoBehaviour
 
     void RaiseChanged()
     {
+        UpdateAbilityUI();
         OnChanged?.Invoke();
     }
 
@@ -215,6 +221,35 @@ public class InventorySystem : MonoBehaviour
         return true;
     }
 
+    void UpdateAbilityUI()
+    {
+        // We can still update in both modes, but it mainly makes sense in ThreeAbilitySystem
+        UpdateAbilityIcon(primaryAbilityIcon, GetActiveItemAt(0));
+        UpdateAbilityIcon(secondaryAbilityIcon, GetActiveItemAt(1));
+        UpdateAbilityIcon(movementAbilityIcon, GetActiveItemAt(2));
+    }
+
+    void UpdateAbilityIcon(Image img, ItemSO item)
+    {
+        if (!img) return;
+
+        if (item != null && item.icon != null)
+        {
+            img.sprite = item.icon;
+            // Make sure it's visible
+            var c = img.color;
+            c.a = 1f;
+            img.color = c;
+        }
+        else
+        {
+            // No item: clear sprite and hide it (alpha 0)
+            img.sprite = null;
+            var c = img.color;
+            c.a = 0f;
+            img.color = c;
+        }
+    }
 
     void MergeDuplicateActives(ItemSO item)
     {

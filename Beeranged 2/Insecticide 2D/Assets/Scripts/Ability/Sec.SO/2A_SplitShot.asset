@@ -15,7 +15,7 @@ MonoBehaviour:
   splitProjectilePrefab: {fileID: 8375545027065108801, guid: 6fcbac35066483e488b92f0399a4e5a3, type: 3}
   speed: 14
   damage: 5
-  splitDistance: 1.2
+  splitDistance: 2
   spreadAngleDeg: 15
   childSpeedMultiplier: 1
   childProjectilePrefab: {fileID: 8375545027065108801, guid: f349d4988959c854bb26217af58c2d88, type: 3}
